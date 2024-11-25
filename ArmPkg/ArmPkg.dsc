@@ -183,7 +183,6 @@
   # MU_CHANGE [BEGIN]
   ArmPkg/Drivers/StandaloneMmCpu/StandaloneMmCpu.inf
   ArmPkg/Library/StandaloneMmCoreEntryPoint/StandaloneMmCoreEntryPoint.inf
-  ArmPkg/Drivers/SmmVariablePei/SmmVariablePei.inf
   # MU_CHANGE [END]
   ArmPkg/Drivers/MmCommunicationPei/MmCommunicationPei.inf
 
