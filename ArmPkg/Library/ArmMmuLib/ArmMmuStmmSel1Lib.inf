@@ -1,0 +1,38 @@
+#/** @file
+#
+#  Copyright (c) 2016 Linaro Ltd. All rights reserved.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+#
+#**/
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = ArmMmuStmmSel1Lib
+  FILE_GUID                      = 8DB98814-30A7-4497-BC23-3A09D5D4AB1F
+  MODULE_TYPE                    = MM_CORE_STANDALONE
+  VERSION_STRING                 = 1.0
+  PI_SPECIFICATION_VERSION       = 0x00010032
+  LIBRARY_CLASS                  = ArmMmuLib | MM_CORE_STANDALONE
+  CONSTRUCTOR                    = ArmMmuLibConstructor
+
+[Sources]
+  ArmMmuLibInternal.h
+  AArch64/ArmMmuLibCore.c
+  AArch64/ArmMmuLibStmmSel1.c
+  AArch64/ArmMmuLibReplaceEntry.S    | GCC    # MU_CHANGE - ARM64 VS change
+  AArch64/ArmMmuLibReplaceEntry.masm | MSFT   # MU_CHANGE - ARM64 VS change
+  AArch64/ArmMmuLibPageTableAllocPei.c         # MU_CHANGE
+
+[Packages]
+  ArmPkg/ArmPkg.dec
+  EmbeddedPkg/EmbeddedPkg.dec
+  MdePkg/MdePkg.dec
+
+[LibraryClasses]
+  ArmLib
+  CacheMaintenanceLib
+  HobLib
+  MemoryAllocationLib
+  SecurePartitionServicesTableLib

@@ -22,7 +22,7 @@
 #include <Library/HobLib.h>
 #include "ArmMmuLibInternal.h"
 
-STATIC  ARM_REPLACE_LIVE_TRANSLATION_ENTRY  mReplaceLiveEntryFunc = ArmReplaceLiveTranslationEntry;
+ARM_REPLACE_LIVE_TRANSLATION_ENTRY  mReplaceLiveEntryFunc = ArmReplaceLiveTranslationEntry;
 
 // MU_CHANGE START: Add functionality for pre-allocating memory for page table entries
 
@@ -751,30 +751,4 @@ ArmConfigureMmu (
 FreeTranslationTable:
   FreePages (TranslationTable, 1);
   return Status;
-}
-
-RETURN_STATUS
-EFIAPI
-ArmMmuBaseLibConstructor (
-  VOID
-  )
-{
-  extern UINT32  ArmReplaceLiveTranslationEntrySize;
-  VOID           *Hob;
-
-  Hob = GetFirstGuidHob (&gArmMmuReplaceLiveTranslationEntryFuncGuid);
-  if (Hob != NULL) {
-    mReplaceLiveEntryFunc = *(ARM_REPLACE_LIVE_TRANSLATION_ENTRY *)GET_GUID_HOB_DATA (Hob);
-  } else {
-    //
-    // The ArmReplaceLiveTranslationEntry () helper function may be invoked
-    // with the MMU off so we have to ensure that it gets cleaned to the PoC
-    //
-    WriteBackDataCacheRange (
-      (VOID *)(UINTN)ArmReplaceLiveTranslationEntry,
-      ArmReplaceLiveTranslationEntrySize
-      );
-  }
-
-  return RETURN_SUCCESS;
 }

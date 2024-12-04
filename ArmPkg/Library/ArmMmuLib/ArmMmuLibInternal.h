@@ -20,4 +20,6 @@ VOID(
   IN  BOOLEAN DisableMmu
   );
 
+extern  ARM_REPLACE_LIVE_TRANSLATION_ENTRY  mReplaceLiveEntryFunc;
+
 #endif

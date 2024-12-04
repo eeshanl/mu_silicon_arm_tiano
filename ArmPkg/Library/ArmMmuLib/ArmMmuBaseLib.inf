@@ -22,6 +22,7 @@
 [Sources.AARCH64]
   ArmMmuLibInternal.h
   AArch64/ArmMmuLibCore.c
+  AArch64/ArmMmuLibCommon.c
   AArch64/ArmMmuLibReplaceEntry.S    | GCC    # MU_CHANGE - ARM64 VS change
   AArch64/ArmMmuLibReplaceEntry.masm | MSFT   # MU_CHANGE - ARM64 VS change
   AArch64/ArmMmuLibPageTableAlloc.c           # MU_CHANGE
