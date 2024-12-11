@@ -185,6 +185,7 @@
   ArmPkg/Library/StandaloneMmCoreEntryPoint/StandaloneMmCoreEntryPoint.inf
   # MU_CHANGE [END]
   ArmPkg/Drivers/MmCommunicationPei/MmCommunicationPei.inf
+  ArmPkg/Drivers/SmmuDxe/SmmuDxe.inf
 
 [Components.AARCH64]
   ArmPkg/Drivers/ArmPsciMpServicesDxe/ArmPsciMpServicesDxe.inf

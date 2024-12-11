@@ -1,0 +1,49 @@
+## @file  SmmuDxe.inf
+# This package provides production standalone applications for the UEFI
+# Firmware. That do not depend on the shell or any other UEFI application.
+# This is targetted at promoting to open source and should be aligned with
+# Tianocore standards
+#
+# Copyright (C) Microsoft Corporation. All rights reserved.
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010006
+  BASE_NAME                      = SmmuDxe
+  FILE_GUID                      = BE506866-85F2-45EC-AC01-9BBF39D4CA78
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = InitializeSmmuDxe
+
+[Sources]
+  IoMmu.c
+  SmmuDxe.c
+  SmmuV3Util.c
+
+[Guids]
+  gEfiSmmuConfigGuid
+  gEfiEventExitBootServicesGuid
+
+[Packages]
+  ArmPkg/ArmPkg.dec
+  ArmPlatformPkg/ArmPlatformPkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  MdePkg/MdePkg.dec
+
+[LibraryClasses]
+  ArmLib
+  BaseLib
+  BaseMemoryLib
+  IoLib
+  HobLib
+  MemoryAllocationLib
+  TimerLib
+  UefiDriverEntryPoint
+
+[Depex]
+  gEfiAcpiTableProtocolGuid                       ## CONSUMES
+
+[Protocols]
+  gEdkiiIoMmuProtocolGuid                         ## PRODUCES
+  gEfiAcpiTableProtocolGuid                       ## CONSUMES
