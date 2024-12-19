@@ -1,23 +1,21 @@
-/** @file smmuv3.h
+/** @file SmmuV3.h
 
-    This file is the smmuv3 header file for SMMU driver.
+    This file is the SmmuV3 header file for SMMU driver compliant with the Smmu spec:
 
-    Copyright (C) Microsoft Corporation. All rights reserved.
+    <https://developer.arm.com/documentation/ihi0070/latest/>
+
+    Copyright (c) Microsoft Corporation.
     SPDX-License-Identifier: BSD-2-Clause-Patent
 
-    Qemu smmu worked on this sha - a53b931645183bd0c15dd19ae0708fc3c81ecf1d
-    QEMU emulator version 9.1.50 (v9.1.0-475-ga53b931645)
 **/
 
-#ifndef SMMUV3_H
-#define SMMUV3_H
+#ifndef SMMUV3_H_
+#define SMMUV3_H_
 
 #include "SmmuV3Registers.h"
 
 #define ROUND_UP(_Value_, _Alignment_) \
     (((_Value_) + (_Alignment_) - 1) & ~((_Alignment_) - 1))
-
-#define SMMU_MMIO_PAGE_SIZE  (1UL << 12)// 4 KB
 
 //
 // Macros to align values up or down. Alignment is required to be power of 2.
@@ -93,9 +91,7 @@
 
 typedef UINT64 PageTableEntry;
 
-#define PAGE_SIZE         4096                               // 4KB
-#define PAGE_TABLE_SIZE   PAGE_SIZE / sizeof(PageTableEntry) // Number of entries in a page table
-#define PAGE_TABLE_DEPTH  4                                  // Number of levels in the page table
+#define PAGE_TABLE_SIZE  EFI_PAGE_SIZE / sizeof(PageTableEntry)  // Number of entries in a page table
 
 typedef enum _SMMU_ADDRESS_SIZE_TYPE {
   SmmuAddressSize32Bit = 0,
@@ -125,7 +121,7 @@ typedef struct _SMMU_INFO {
   UINT32        EventQueueLog2Size;
 } SMMU_INFO;
 
-extern SMMU_INFO  *Smmu;
+extern SMMU_INFO  *mSmmu;
 
 UINT32
 EFIAPI

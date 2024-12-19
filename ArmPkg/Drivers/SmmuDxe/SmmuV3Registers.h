@@ -1,16 +1,17 @@
-/** @file smmuv3registers.h
+/** @file SmmuV3Registers.h
 
-    This file is the smmuv3registers header file for SMMU driver.
+    This file is the SmmuV3Registers header file for SMMU driver.
 
-    Copyright (C) Microsoft Corporation. All rights reserved.
+    Contains all relevant register definitions for SMMUv3 found per the spec:
+    <https://developer.arm.com/documentation/ihi0070/latest/>
+
+    Copyright (c) Microsoft Corporation.
     SPDX-License-Identifier: BSD-2-Clause-Patent
 
-    Qemu smmu worked on this sha - a53b931645183bd0c15dd19ae0708fc3c81ecf1d
-    QEMU emulator version 9.1.50 (v9.1.0-475-ga53b931645)
 **/
 
-#ifndef SMMUV3_REGISTERS_H
-#define SMMUV3_REGISTERS_H
+#ifndef SMMUV3_REGISTERS_H_
+#define SMMUV3_REGISTERS_H_
 
 typedef enum _SMMUV3_REVISION {
   SMMUV3_0,

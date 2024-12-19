@@ -2,25 +2,21 @@
 
     This file is the IoMmu header file for SMMU driver.
 
-    Copyright (C) Microsoft Corporation. All rights reserved.
+    Copyright (c) Microsoft Corporation.
     SPDX-License-Identifier: BSD-2-Clause-Patent
 
-    Qemu smmu worked on this sha - a53b931645183bd0c15dd19ae0708fc3c81ecf1d
-    QEMU emulator version 9.1.50 (v9.1.0-475-ga53b931645)
 **/
 
-#ifndef IOMMU_H
-#define IOMMU_H
+#ifndef IOMMU_H_
+#define IOMMU_H_
 
 #include <Library/ArmLib.h>
 #include "SmmuV3.h"
 
-#define NO_MAPPING  (VOID *) (UINTN) -1
-
 PAGE_TABLE *
 EFIAPI
 PageTableInit (
-  IN UINT8  Level
+  VOID
   );
 
 VOID

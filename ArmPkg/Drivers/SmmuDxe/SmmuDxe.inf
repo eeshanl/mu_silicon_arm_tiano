@@ -1,10 +1,12 @@
 ## @file  SmmuDxe.inf
-# This package provides production standalone applications for the UEFI
-# Firmware. That do not depend on the shell or any other UEFI application.
-# This is targetted at promoting to open source and should be aligned with
-# Tianocore standards
+# Smmu Dxe driver - used to enable dma remapping via the IoMmu.
+# This driver initializes the SmmuV3 hardware to enable stage 2 translation and dma remapping.
+# The IOMMU protocol is implemented assuming a 4-level Page Table Structure.
+# The Page Table Root address is used to configure the Stream Table to enable the SMMU for stage 2 translation.
 #
-# Copyright (C) Microsoft Corporation. All rights reserved.
+# For more info See README.md
+#
+# Copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 ##
 
@@ -22,12 +24,11 @@
   SmmuV3Util.c
 
 [Guids]
-  gEfiSmmuConfigGuid
+  gSmmuConfigGuid
   gEfiEventExitBootServicesGuid
 
 [Packages]
   ArmPkg/ArmPkg.dec
-  ArmPlatformPkg/ArmPlatformPkg.dec
   MdeModulePkg/MdeModulePkg.dec
   MdePkg/MdePkg.dec
 

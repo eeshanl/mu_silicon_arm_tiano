@@ -2,11 +2,9 @@
 
     This file contains util functions for the SMMU driver.
 
-    Copyright (C) Microsoft Corporation. All rights reserved.
+    Copyright (c) Microsoft Corporation.
     SPDX-License-Identifier: BSD-2-Clause-Patent
 
-    Qemu smmu worked on this sha - a53b931645183bd0c15dd19ae0708fc3c81ecf1d
-    QEMU emulator version 9.1.50 (v9.1.0-475-ga53b931645)
 **/
 
 #include <Library/ArmLib.h>
@@ -19,6 +17,13 @@
 #include <Library/UefiDriverEntryPoint.h>
 #include "SmmuV3.h"
 
+/**
+  Decode the address width from the given address size type.
+
+  @param [in]  AddressSizeType  The address size type.
+
+  @return The decoded address width.
+**/
 UINT32
 EFIAPI
 SmmuV3DecodeAddressWidth (
@@ -58,6 +63,13 @@ SmmuV3DecodeAddressWidth (
   return Length;
 }
 
+/**
+  Encode the address width to the corresponding address size type.
+
+  @param [in]  AddressWidth  The address width.
+
+  @return The encoded address size type.
+**/
 UINT8
 EFIAPI
 SmmuV3EncodeAddressWidth (
@@ -96,6 +108,14 @@ SmmuV3EncodeAddressWidth (
   return Encoding;
 }
 
+/**
+  Read a 32-bit value from the specified SMMU register.
+
+  @param [in]  SmmuBase   The base address of the SMMU.
+  @param [in]  Register   The offset of the register.
+
+  @return The 32-bit value read from the register.
+**/
 UINT32
 EFIAPI
 SmmuV3ReadRegister32 (
@@ -106,6 +126,14 @@ SmmuV3ReadRegister32 (
   return MmioRead32 (SmmuBase + Register);
 }
 
+/**
+  Read a 64-bit value from the specified SMMU register.
+
+  @param [in]  SmmuBase   The base address of the SMMU.
+  @param [in]  Register   The offset of the register.
+
+  @return The 64-bit value read from the register.
+**/
 UINT64
 EFIAPI
 SmmuV3ReadRegister64 (
@@ -116,6 +144,15 @@ SmmuV3ReadRegister64 (
   return MmioRead64 (SmmuBase + Register);
 }
 
+/**
+  Write a 32-bit value to the specified SMMU register.
+
+  @param [in]  SmmuBase   The base address of the SMMU.
+  @param [in]  Register   The offset of the register.
+  @param [in]  Value      The 32-bit value to write.
+
+  @return The 32-bit value written to the register.
+**/
 UINT32
 EFIAPI
 SmmuV3WriteRegister32 (
@@ -127,6 +164,15 @@ SmmuV3WriteRegister32 (
   return MmioWrite32 (SmmuBase + Register, Value);
 }
 
+/**
+  Write a 64-bit value to the specified SMMU register.
+
+  @param [in]  SmmuBase   The base address of the SMMU.
+  @param [in]  Register   The offset of the register.
+  @param [in]  Value      The 64-bit value to write.
+
+  @return The 64-bit value written to the register.
+**/
 UINT64
 EFIAPI
 SmmuV3WriteRegister64 (
@@ -138,6 +184,15 @@ SmmuV3WriteRegister64 (
   return MmioWrite64 (SmmuBase + Register, Value);
 }
 
+/**
+  Disable interrupts for the SMMUv3.
+
+  @param [in]  SmmuBase          The base address of the SMMU.
+  @param [in]  ClearStaleErrors  Whether to clear stale errors.
+
+  @retval EFI_SUCCESS            Success.
+  @retval Others                 Failure.
+**/
 EFI_STATUS
 EFIAPI
 SmmuV3DisableInterrupts (
@@ -169,6 +224,14 @@ SmmuV3DisableInterrupts (
   return EFI_SUCCESS;
 }
 
+/**
+  Enable interrupts for the SMMUv3.
+
+  @param [in]  SmmuBase  The base address of the SMMU.
+
+  @retval EFI_SUCCESS    Success.
+  @retval Others         Failure.
+**/
 EFI_STATUS
 EFIAPI
 SmmuV3EnableInterrupts (
@@ -191,6 +254,14 @@ SmmuV3EnableInterrupts (
   return Status;
 }
 
+/**
+  Disable translation for the SMMUv3.
+
+  @param [in]  SmmuBase  The base address of the SMMU.
+
+  @retval EFI_SUCCESS    Success.
+  @retval Others         Failure.
+**/
 EFI_STATUS
 EFIAPI
 SmmuV3DisableTranslation (
@@ -347,6 +418,15 @@ SmmuV3Poll (
   return EFI_TIMEOUT;
 }
 
+/**
+  Consume the event queue for errors and retrieve the fault record.
+
+  @param [in]  SmmuInfo     Pointer to the SMMU_INFO structure.
+  @param [out] FaultRecord  Pointer to the fault record structure.
+
+  @retval EFI_SUCCESS       Success.
+  @retval Others            Failure.
+**/
 EFI_STATUS
 EFIAPI
 SmmuV3ConsumeEventQueueForErrors (
@@ -407,6 +487,11 @@ End:
   return EFI_SUCCESS;
 }
 
+/**
+  Print the errors from the SMMUv3. Prints Event Queue entries and GError register.
+
+  @param [in]  SmmuInfo  Pointer to the SMMU_INFO structure.
+**/
 VOID
 EFIAPI
 SmmuV3PrintErrors (
@@ -426,6 +511,14 @@ SmmuV3PrintErrors (
   DEBUG ((DEBUG_INFO, "GError: 0x%lx\n", GError.AsUINT32));
 }
 
+/**
+  Write commands to the SMMUv3 command queue.
+
+  @param [in]  SmmuInfo       Pointer to the SMMU_INFO structure.
+  @param [in]  StartingIndex  The starting index in the command queue.
+  @param [in]  CommandCount   The number of commands to write.
+  @param [in]  Commands       Pointer to the commands to write.
+**/
 STATIC
 VOID
 EFIAPI
@@ -451,6 +544,15 @@ SmmuV3WriteCommands (
   }
 }
 
+/**
+  Send a command to the SMMUv3.
+
+  @param [in]  SmmuInfo  Pointer to the SMMU_INFO structure.
+  @param [in]  Command   Pointer to the command to send.
+
+  @retval EFI_SUCCESS    Success.
+  @retval EFI_TIMEOUT    Timeout.
+**/
 EFI_STATUS
 EFIAPI
 SmmuV3SendCommand (
@@ -506,7 +608,13 @@ SmmuV3SendCommand (
     Count--;
   }
 
-  if (Count == 0) {
+  if ((Count == 0) && (SMMUV3_IS_QUEUE_FULL (
+                         ProducerIndex,
+                         ProducerWrap,
+                         ConsumerIndex,
+                         ConsumerWrap
+                         ) != FALSE))
+  {
     DEBUG ((DEBUG_ERROR, "Command Queue Full, Timeout\n"));
     return EFI_TIMEOUT;
   }
@@ -532,7 +640,7 @@ SmmuV3SendCommand (
     Count--;
   }
 
-  if (Count == 0) {
+  if ((Count == 0) && (Consumer.ReadIndex < Producer.WriteIndex)) {
     DEBUG ((DEBUG_ERROR, "Timeout waiting for command queue to be consumed\n"));
     return EFI_TIMEOUT;
   }

@@ -32,7 +32,7 @@ PeCoffLoaderRelocateImageExtraAction (
   IN OUT PE_COFF_LOADER_IMAGE_CONTEXT  *ImageContext
   )
 {
- #ifdef __GNUC__
+#ifdef __GNUC__
   if (ImageContext->PdbPointer) {
     DEBUG ((
       DEBUG_LOAD | DEBUG_INFO,
@@ -42,8 +42,7 @@ PeCoffLoaderRelocateImageExtraAction (
       ));
     return;
   }
-
- #endif
+#endif
 
   DEBUG ((
     DEBUG_LOAD | DEBUG_INFO,
@@ -69,7 +68,7 @@ PeCoffLoaderUnloadImageExtraAction (
   IN OUT PE_COFF_LOADER_IMAGE_CONTEXT  *ImageContext
   )
 {
- #ifdef __GNUC__
+#ifdef __GNUC__
   if (ImageContext->PdbPointer) {
     DEBUG ((
       DEBUG_LOAD | DEBUG_INFO,
@@ -79,8 +78,7 @@ PeCoffLoaderUnloadImageExtraAction (
       ));
     return;
   }
-
- #endif
+#endif
 
   DEBUG ((
     DEBUG_LOAD | DEBUG_INFO,

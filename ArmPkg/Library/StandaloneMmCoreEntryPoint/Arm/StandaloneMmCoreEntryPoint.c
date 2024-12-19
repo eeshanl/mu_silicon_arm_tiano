@@ -144,10 +144,10 @@ DelegatedEventLoop (
     FfaEnabled = FeaturePcdGet (PcdFfaEnable);
     if (FfaEnabled) {
       Status = CpuDriverEntryPoint (
-                 EventCompleteSvcArgs->Arg0,
-                 EventCompleteSvcArgs->Arg6,
-                 EventCompleteSvcArgs->Arg3
-                 );
+                  EventCompleteSvcArgs->Arg0,
+                  EventCompleteSvcArgs->Arg6,
+                  EventCompleteSvcArgs->Arg3
+                  );
       if (EFI_ERROR (Status)) {
         DEBUG ((
           DEBUG_ERROR,
@@ -158,10 +158,10 @@ DelegatedEventLoop (
       }
     } else {
       Status = CpuDriverEntryPoint (
-                 EventCompleteSvcArgs->Arg0,
-                 EventCompleteSvcArgs->Arg3,
-                 EventCompleteSvcArgs->Arg1
-                 );
+                  EventCompleteSvcArgs->Arg0,
+                  EventCompleteSvcArgs->Arg3,
+                  EventCompleteSvcArgs->Arg1
+                  );
       if (EFI_ERROR (Status)) {
         DEBUG ((
           DEBUG_ERROR,

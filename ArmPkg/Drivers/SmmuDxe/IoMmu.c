@@ -2,11 +2,9 @@
 
     This file contains functions for the IoMmu protocol.
 
-    Copyright (C) Microsoft Corporation. All rights reserved.
+    Copyright (c) Microsoft Corporation. All rights reserved.
     SPDX-License-Identifier: BSD-2-Clause-Patent
 
-    Qemu smmu worked on this sha - a53b931645183bd0c15dd19ae0708fc3c81ecf1d
-    QEMU emulator version 9.1.50 (v9.1.0-475-ga53b931645)
 **/
 
 #include <Uefi.h>
@@ -21,6 +19,16 @@
 #include <Protocol/IoMmu.h>
 #include "IoMmu.h"
 #include "SmmuV3Registers.h"
+
+#define PAGE_TABLE_DEPTH  4                             // Number of levels in the page table
+#define PAGE_TABLE_READ_WRITE_FROM_IOMMU_ACCESS(IOMMU_ACCESS)  (IOMMU_ACCESS << 6)
+#define PAGE_TABLE_READ_BIT         (0x1 << 6)
+#define PAGE_TABLE_WRITE_BIT        (0x1 << 7)
+#define PAGE_TABLE_ENTRY_VALID_BIT  0x1
+#define PAGE_TABLE_BLOCK_OFFSET     0xFFF
+#define PAGE_TABLE_ACCESS_FLAG      (0x1 << 10)
+#define PAGE_TABLE_DESCRIPTOR       (0x1 << 1)
+#define PAGE_TABLE_INDEX(VA, LEVEL)  (((VA) >> (12 + (9 * (PAGE_TABLE_DEPTH - 1 - (LEVEL))))) & 0x1FF)
 
 EDKII_IOMMU_PROTOCOL  SmmuIoMmu = {
   EDKII_IOMMU_PROTOCOL_REVISION,
@@ -37,6 +45,16 @@ typedef struct IOMMU_MAP_INFO {
   UINT64    PA;
 } IOMMU_MAP_INFO;
 
+/**
+  Update the flags of a page table entry.
+
+  @param [in]  Table         Pointer to the page table.
+  @param [in]  SetFlagsOnly  Boolean to indicate if only flags should be set.
+  @param [in]  Flags         Flags to set or clear.
+  @param [in]  Index         Index of the entry to update.
+
+  @retval EFI_SUCCESS        Success.
+**/
 STATIC
 EFI_STATUS
 EFIAPI
@@ -51,19 +69,43 @@ UpdateFlags (
     return EFI_INVALID_PARAMETER;
   }
 
+  // This boolean is used to explicity update the R/W bits in the page table entry.
+  // Allows clearing the R/W bits without affecting the other bits in the entry.
   if (SetFlagsOnly) {
     if (Flags != 0) {
+      // Set R/W bits in page table entry
       Table->Entries[Index] |= Flags;
     } else {
-      Table->Entries[Index] &= ~(0x3 << 6);
+      // Clear R/W bits in page table entry
+      Table->Entries[Index] &= ~(PAGE_TABLE_READ_BIT | PAGE_TABLE_WRITE_BIT);
     }
   } else {
+    // Set R/W bits in page table entry
     Table->Entries[Index] |= Flags;
   }
 
   return EFI_SUCCESS;
 }
 
+/**
+  Update the mapping of a virtual address to a physical address in the page table.
+
+  Iterates through the page table levels to find the leaf entry for the given virtual address and
+  validates entries along the way as needed. The leaf entry is then updated with the physical address along
+  with appropriate flags and valid bit set. The option SetFlagsOnly allows traversal of the page table while
+  only updating the flags of the entry, allowing clearing of flag bits as well.
+
+  @param [in]  Root          Pointer to the root page table.
+  @param [in]  VA            Virtual address to map.
+  @param [in]  PA            Physical address to map to.
+  @param [in]  Flags         Flags to set for the mapping.
+  @param [in]  Valid         Boolean to indicate if the entry is valid.
+  @param [in]  SetFlagsOnly  Boolean to indicate if only flags should be set.
+
+  @retval EFI_SUCCESS        Success.
+  @retval EFI_INVALID_PARAMETER  Invalid parameter.
+  @retval EFI_OUT_OF_RESOURCES   Out of resources.
+**/
 STATIC
 EFI_STATUS
 EFIAPI
@@ -76,32 +118,35 @@ UpdateMapping (
   IN BOOLEAN     SetFlagsOnly
   )
 {
+  EFI_STATUS  Status;
+  UINT8       Level;
+  UINT64      Index;
+  PAGE_TABLE  *Current;
+
   if (Root == NULL) {
     return EFI_INVALID_PARAMETER;
   }
 
-  EFI_STATUS  Status;
-  UINT64      Index;
-  UINTN       Pages    = EFI_SIZE_TO_PAGES (sizeof (PAGE_TABLE));
-  PAGE_TABLE  *Current = Root;
+  Current = Root;
 
-  for (UINT8 Level = 0; Level < PAGE_TABLE_DEPTH - 1; Level++) {
-    Index = (VA >> (12 + (9 * (PAGE_TABLE_DEPTH - 1 - Level)))) & 0x1FF;
+  // Traverse the page table to the leaf level
+  for (Level = 0; Level < PAGE_TABLE_DEPTH - 1; Level++) {
+    Index = PAGE_TABLE_INDEX (VA, Level);
 
     if (Current->Entries[Index] == 0) {
-      PAGE_TABLE  *NewPage = (PAGE_TABLE *)((UINTN)AllocateAlignedPages (Pages, EFI_PAGE_SIZE) & ~0xFFF);
-      if (NewPage == 0) {
+      PAGE_TABLE  *NewPage = (PAGE_TABLE *)AllocateAlignedPages (1, EFI_PAGE_SIZE);
+      if (NewPage == NULL) {
         return EFI_OUT_OF_RESOURCES;
       }
 
-      ZeroMem ((VOID *)NewPage, EFI_PAGES_TO_SIZE (Pages));
+      ZeroMem ((VOID *)NewPage, EFI_PAGE_SIZE);
 
       Current->Entries[Index] = (PageTableEntry)(UINTN)NewPage;
     }
 
     if (!SetFlagsOnly) {
       if (Valid) {
-        Current->Entries[Index] |= 0x1; // valid entry
+        Current->Entries[Index] |= PAGE_TABLE_ENTRY_VALID_BIT; // valid entry
       }
     }
 
@@ -111,23 +156,23 @@ UpdateMapping (
       return Status;
     }
 
-    Current = (PAGE_TABLE *)((UINTN)Current->Entries[Index] & ~0xFFF);
+    Current = (PAGE_TABLE *)((UINTN)Current->Entries[Index] & ~PAGE_TABLE_BLOCK_OFFSET);
   }
 
   // leaf level
   if (Current != 0) {
-    Index = (VA >> 12) & 0x1FF;
+    Index = PAGE_TABLE_INDEX (VA, Level);
 
-    if (Valid && ((Current->Entries[Index] & 0x1) != 0)) {
+    if (Valid && ((Current->Entries[Index] & PAGE_TABLE_ENTRY_VALID_BIT) != 0)) {
       DEBUG ((DEBUG_INFO, "%a: Page already mapped\n", __func__));
     }
 
     if (!SetFlagsOnly) {
       if (Valid) {
-        Current->Entries[Index]  = (PA & ~0xFFF); // Assign PA
-        Current->Entries[Index] |= 0x1;           // valid entry
+        Current->Entries[Index]  = (PA & ~PAGE_TABLE_BLOCK_OFFSET); // Assign PA
+        Current->Entries[Index] |= PAGE_TABLE_ENTRY_VALID_BIT;      // valid entry
       } else {
-        Current->Entries[Index] &= ~0x1; // only invalidate leaf entry
+        Current->Entries[Index] &= ~PAGE_TABLE_ENTRY_VALID_BIT; // only invalidate leaf entry
       }
     }
 
@@ -141,6 +186,20 @@ UpdateMapping (
   return Status;
 }
 
+/**
+  Update the page table with the given physical address and flags.
+
+  @param [in]  Root              Pointer to the root page table.
+  @param [in]  PhysicalAddress   Physical address to map.
+  @param [in]  Bytes             Number of bytes to map.
+  @param [in]  Flags             Flags to set for the mapping.
+  @param [in]  Valid             Boolean to indicate if the entry is valid.
+  @param [in]  SetFlagsOnly      Boolean to indicate if only flags should be set.
+
+  @retval EFI_SUCCESS            Success.
+  @retval EFI_INVALID_PARAMETER  Invalid parameter.
+  @retval EFI_OUT_OF_RESOURCES   Out of resources.
+**/
 EFI_STATUS
 EFIAPI
 UpdatePageTable (
@@ -171,6 +230,20 @@ UpdatePageTable (
   return Status;
 }
 
+/**
+  Map a host address to a device address using the IOMMU.
+
+  @param [in]      This            Pointer to the IOMMU protocol instance.
+  @param [in]      Operation       The type of IOMMU operation.
+  @param [in]      HostAddress     The host address to map.
+  @param [in, out] NumberOfBytes   On input, the number of bytes to map. On output, the number of bytes mapped.
+  @param [out]     DeviceAddress   The resulting device address.
+  @param [out]     Mapping         A handle to the mapping.
+
+  @retval EFI_SUCCESS              Success.
+  @retval EFI_INVALID_PARAMETER    Invalid parameter.
+  @retval EFI_OUT_OF_RESOURCES     Out of resources.
+**/
 EFI_STATUS
 EFIAPI
 IoMmuMap (
@@ -189,10 +262,10 @@ IoMmuMap (
   // Arm Architecture Reference Manual Armv8, for Armv8-A architecture profile:
   // The VMSAv8-64 translation table format descriptors.
   // Bit #10 AF = 1, Table/Page Descriptors for levels 0-3 so set bit #1 to 0b'1 for each entry
-  UINT64  Flags = 0x402;
+  UINT64  Flags = PAGE_TABLE_ACCESS_FLAG | PAGE_TABLE_DESCRIPTOR;
 
   PhysicalAddress = (EFI_PHYSICAL_ADDRESS)(UINTN)HostAddress;
-  Status          = UpdatePageTable (Smmu->PageTableRoot, PhysicalAddress, *NumberOfBytes, Flags, TRUE, FALSE);
+  Status          = UpdatePageTable (mSmmu->PageTableRoot, PhysicalAddress, *NumberOfBytes, Flags, TRUE, FALSE);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "%a: UpdatePageTable failed.\n", __func__));
     return Status;
@@ -209,6 +282,15 @@ IoMmuMap (
   return Status;
 }
 
+/**
+  Unmap a device address in the Page Table, invalidate the TLB.
+
+  @param [in]  This      Pointer to the IOMMU protocol instance.
+  @param [in]  Mapping   The mapping to unmap.
+
+  @retval EFI_SUCCESS    Success.
+  @retval EFI_INVALID_PARAMETER  Invalid parameter.
+**/
 EFI_STATUS
 EFIAPI
 IoMmuUnmap (
@@ -216,16 +298,17 @@ IoMmuUnmap (
   IN  VOID                  *Mapping
   )
 {
-  IOMMU_MAP_INFO  *MapInfo = (IOMMU_MAP_INFO *)Mapping;
+  EFI_STATUS          Status;
+  SMMUV3_CMD_GENERIC  Command;
+  IOMMU_MAP_INFO      *MapInfo;
 
   if (Mapping == NULL) {
     return EFI_INVALID_PARAMETER;
   }
 
-  EFI_STATUS          Status;
-  SMMUV3_CMD_GENERIC  Command;
+  MapInfo = (IOMMU_MAP_INFO *)Mapping;
 
-  Status = UpdatePageTable (Smmu->PageTableRoot, MapInfo->PA, MapInfo->NumberOfBytes, 0, FALSE, FALSE);
+  Status = UpdatePageTable (mSmmu->PageTableRoot, MapInfo->PA, MapInfo->NumberOfBytes, 0, FALSE, FALSE);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "%a: UpdatePageTable failed.\n", __func__));
     return Status;
@@ -233,13 +316,13 @@ IoMmuUnmap (
 
   // Invalidate TLB
   SMMUV3_BUILD_CMD_TLBI_NSNH_ALL (&Command);
-  SmmuV3SendCommand (Smmu, &Command);
+  SmmuV3SendCommand (mSmmu, &Command);
   SMMUV3_BUILD_CMD_TLBI_EL2_ALL (&Command);
-  SmmuV3SendCommand (Smmu, &Command);
+  SmmuV3SendCommand (mSmmu, &Command);
   // Issue a CMD_SYNC command to guarantee that any previously issued TLB
   // invalidations (CMD_TLBI_*) are completed (SMMUv3.2 spec section 4.6.3).
   SMMUV3_BUILD_CMD_SYNC_NO_INTERRUPT (&Command);
-  SmmuV3SendCommand (Smmu, &Command);
+  SmmuV3SendCommand (mSmmu, &Command);
 
   if (MapInfo != NULL) {
     FreePool (MapInfo);
@@ -248,6 +331,15 @@ IoMmuUnmap (
   return EFI_SUCCESS;
 }
 
+/**
+  Free a buffer allocated by IoMmuAllocateBuffer.
+
+  @param [in]  This          Pointer to the IOMMU protocol instance.
+  @param [in]  Pages         The number of pages to free.
+  @param [in]  HostAddress   The host address to free.
+
+  @retval EFI_SUCCESS        Success.
+**/
 EFI_STATUS
 EFIAPI
 IoMmuFreeBuffer (
@@ -259,6 +351,20 @@ IoMmuFreeBuffer (
   return gBS->FreePages ((EFI_PHYSICAL_ADDRESS)(UINTN)HostAddress, Pages);
 }
 
+/**
+  Allocate a buffer for use with the IOMMU.
+
+  @param [in]      This          Pointer to the IOMMU protocol instance.
+  @param [in]      Type          The type of allocation to perform.
+  @param [in]      MemoryType    The type of memory to allocate.
+  @param [in]      Pages         The number of pages to allocate.
+  @param [in, out] HostAddress   On input, the desired host address. On output, the allocated host address.
+  @param [in]      Attributes    The memory attributes to use for the allocation.
+
+  @retval EFI_SUCCESS            Success.
+  @retval EFI_INVALID_PARAMETER  Invalid parameter.
+  @retval EFI_OUT_OF_RESOURCES   Out of resources.
+**/
 EFI_STATUS
 EFIAPI
 IoMmuAllocateBuffer (
@@ -286,6 +392,16 @@ IoMmuAllocateBuffer (
   return Status;
 }
 
+/**
+  Set the R/W attributes for a device handle.
+
+  @param [in]  This          Pointer to the IOMMU protocol instance.
+  @param [in]  DeviceHandle  The device handle to set attributes for.
+  @param [in]  Mapping       The mapping to set attributes for.
+  @param [in]  IoMmuAccess   The IOMMU access attributes for R/W.
+
+  @retval EFI_SUCCESS        Success.
+**/
 EFI_STATUS
 EFIAPI
 IoMmuSetAttribute (
@@ -295,16 +411,23 @@ IoMmuSetAttribute (
   IN UINT64                IoMmuAccess
   )
 {
-  IOMMU_MAP_INFO  *MapInfo = (IOMMU_MAP_INFO *)Mapping;
+  EFI_STATUS      Status;
+  IOMMU_MAP_INFO  *MapInfo;
 
   if (Mapping == NULL) {
     return EFI_SUCCESS;
   }
 
-  EFI_STATUS  Status;
+  MapInfo = (IOMMU_MAP_INFO *)Mapping;
 
-  // R/W bits are bit 6,7 in PageTableEntry
-  Status = UpdatePageTable (Smmu->PageTableRoot, MapInfo->PA, MapInfo->NumberOfBytes, IoMmuAccess << 6, FALSE, TRUE);
+  Status = UpdatePageTable (
+             mSmmu->PageTableRoot,
+             MapInfo->PA,
+             MapInfo->NumberOfBytes,
+             PAGE_TABLE_READ_WRITE_FROM_IOMMU_ACCESS (IoMmuAccess),
+             FALSE,
+             TRUE
+             );
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "%a: UpdatePageTable failed.\n", __func__));
     return Status;
@@ -313,19 +436,23 @@ IoMmuSetAttribute (
   return Status;
 }
 
+/**
+  Initialize a page table. Only initializes the root page table.
+
+  @retval A pointer to the initialized page table.
+**/
 PAGE_TABLE *
 EFIAPI
 PageTableInit (
-  IN UINT8  Level
+  VOID
   )
 {
-  if (Level >= PAGE_TABLE_DEPTH) {
-    return NULL;
-  }
+  UINTN       Pages;
+  PAGE_TABLE  *PageTable;
 
-  UINTN  Pages = EFI_SIZE_TO_PAGES (sizeof (PAGE_TABLE));
+  Pages = EFI_SIZE_TO_PAGES (sizeof (PAGE_TABLE));
 
-  PAGE_TABLE  *PageTable = (PAGE_TABLE *)((UINTN)AllocateAlignedPages (Pages, EFI_PAGE_SIZE) & ~0xFFF);
+  PageTable = (PAGE_TABLE *)AllocateAlignedPages (Pages, EFI_PAGE_SIZE);
 
   if (PageTable == NULL) {
     return NULL;
@@ -333,10 +460,15 @@ PageTableInit (
 
   ZeroMem (PageTable, EFI_PAGES_TO_SIZE (Pages));
 
-  ASSERT (PageTable != NULL);
   return PageTable;
 }
 
+/**
+  Deinitialize a page table.
+
+  @param [in]  Level      The level of the page table to deinitialize.
+  @param [in]  PageTable  The page table to deinitialize.
+**/
 VOID
 EFIAPI
 PageTableDeInit (
@@ -344,21 +476,28 @@ PageTableDeInit (
   IN PAGE_TABLE  *PageTable
   )
 {
+  UINTN  Index;
+
   if ((Level >= PAGE_TABLE_DEPTH) || (PageTable == NULL)) {
     return;
   }
 
-  for (UINTN i = 0; i < PAGE_TABLE_SIZE; i++) {
-    PageTableEntry  Entry = PageTable->Entries[i];
+  for (Index = 0; Index < PAGE_TABLE_SIZE; Index++) {
+    PageTableEntry  Entry = PageTable->Entries[Index];
 
     if (Entry != 0) {
-      PageTableDeInit (Level + 1, (PAGE_TABLE *)((UINTN)Entry & ~0xFFF));
+      PageTableDeInit (Level + 1, (PAGE_TABLE *)((UINTN)Entry & ~PAGE_TABLE_BLOCK_OFFSET));
     }
   }
 
   FreePages (PageTable, EFI_SIZE_TO_PAGES (sizeof (PAGE_TABLE)));
 }
 
+/**
+  Initialize the IOMMU.
+
+  @retval EFI_SUCCESS  Success.
+**/
 EFI_STATUS
 EFIAPI
 IoMmuInit (
