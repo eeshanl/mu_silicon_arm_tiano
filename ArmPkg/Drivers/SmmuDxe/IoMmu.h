@@ -10,72 +10,34 @@
 #ifndef IOMMU_H_
 #define IOMMU_H_
 
-#include <Library/ArmLib.h>
-#include "SmmuV3.h"
+/**
+  Page Table bit definitions used by the Smmu/IoMmu for mapping
+  <https://developer.arm.com/documentation/102105/ka-07>
+  Section D8.3.1 VMSAv8-64 descriptor formats
+**/
+#define PAGE_TABLE_DEPTH            4                           // Number of levels in the page table
+#define PAGE_TABLE_READ_BIT         (0x1 << 6)
+#define PAGE_TABLE_WRITE_BIT        (0x1 << 7)
+#define PAGE_TABLE_ENTRY_VALID_BIT  0x1
+#define PAGE_TABLE_BLOCK_OFFSET     0xFFF
+#define PAGE_TABLE_ACCESS_FLAG      (0x1 << 10)
+#define PAGE_TABLE_DESCRIPTOR       (0x1 << 1)
+#define PAGE_TABLE_INDEX(VirtualAddress, Level)               (((VirtualAddress) >> (12 + (9 * (PAGE_TABLE_DEPTH - 1 - (Level))))) & 0x1FF)
+#define PAGE_TABLE_READ_WRITE_FROM_IOMMU_ACCESS(IoMmuAccess)  (IoMmuAccess << 6)
 
-PAGE_TABLE *
-EFIAPI
-PageTableInit (
-  VOID
-  );
+/**
+  Installs the IOMMU Protocol on this SMMU instance.
 
-VOID
-EFIAPI
-PageTableDeInit (
-  IN UINT8       Level,
-  IN PAGE_TABLE  *PageTable
-  );
-
+  @retval EFI_SUCCESS           All the protocol interface was installed.
+  @retval EFI_OUT_OF_RESOURCES  There was not enough memory in pool to install all the protocols.
+  @retval EFI_ALREADY_STARTED   A Device Path Protocol instance was passed in that is already present in
+                                the handle database.
+  @retval EFI_INVALID_PARAMETER Handle is NULL.
+  @retval EFI_INVALID_PARAMETER Protocol is already installed on the handle specified by Handle.
+**/
 EFI_STATUS
-EFIAPI
 IoMmuInit (
   VOID
-  );
-
-EFI_STATUS
-EFIAPI
-IoMmuSetAttribute (
-  IN EDKII_IOMMU_PROTOCOL  *This,
-  IN EFI_HANDLE            DeviceHandle,
-  IN VOID                  *Mapping,
-  IN UINT64                IoMmuAccess
-  );
-
-EFI_STATUS
-EFIAPI
-IoMmuAllocateBuffer (
-  IN     EDKII_IOMMU_PROTOCOL  *This,
-  IN     EFI_ALLOCATE_TYPE     Type,
-  IN     EFI_MEMORY_TYPE       MemoryType,
-  IN     UINTN                 Pages,
-  IN OUT VOID                  **HostAddress,
-  IN     UINT64                Attributes
-  );
-
-EFI_STATUS
-EFIAPI
-IoMmuFreeBuffer (
-  IN  EDKII_IOMMU_PROTOCOL  *This,
-  IN  UINTN                 Pages,
-  IN  VOID                  *HostAddress
-  );
-
-EFI_STATUS
-EFIAPI
-IoMmuUnmap (
-  IN  EDKII_IOMMU_PROTOCOL  *This,
-  IN  VOID                  *Mapping
-  );
-
-EFI_STATUS
-EFIAPI
-IoMmuMap (
-  IN     EDKII_IOMMU_PROTOCOL   *This,
-  IN     EDKII_IOMMU_OPERATION  Operation,
-  IN     VOID                   *HostAddress,
-  IN OUT UINTN                  *NumberOfBytes,
-  OUT    EFI_PHYSICAL_ADDRESS   *DeviceAddress,
-  OUT    VOID                   **Mapping
   );
 
 #endif

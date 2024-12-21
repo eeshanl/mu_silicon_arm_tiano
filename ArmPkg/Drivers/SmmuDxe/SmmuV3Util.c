@@ -1,6 +1,7 @@
 /** @file Smmuv3Util.c
 
     This file contains util functions for the SMMU driver.
+    All functions are derived from the SMMU spec: <https://developer.arm.com/documentation/ihi0070/latest/>
 
     Copyright (c) Microsoft Corporation.
     SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -22,10 +23,9 @@
 
   @param [in]  AddressSizeType  The address size type.
 
-  @return The decoded address width.
+  @return The decoded address width. 0 if the address size type is invalid.
 **/
 UINT32
-EFIAPI
 SmmuV3DecodeAddressWidth (
   IN UINT32  AddressSizeType
   )
@@ -55,7 +55,7 @@ SmmuV3DecodeAddressWidth (
       Length = 52;
       break;
     default:
-      ASSERT (FALSE);
+      DEBUG ((DEBUG_ERROR, "%a: Invalid Address Size Type: 0x%lx\n", __func__, AddressSizeType));
       Length = 0;
       break;
   }
@@ -68,10 +68,9 @@ SmmuV3DecodeAddressWidth (
 
   @param [in]  AddressWidth  The address width.
 
-  @return The encoded address size type.
+  @return The encoded address size type. 0 if the address width is invalid.
 **/
 UINT8
-EFIAPI
 SmmuV3EncodeAddressWidth (
   IN UINT32  AddressWidth
   )
@@ -101,8 +100,9 @@ SmmuV3EncodeAddressWidth (
       Encoding = SmmuAddressSize52Bit;
       break;
     default:
-      ASSERT (FALSE);
+      DEBUG ((DEBUG_ERROR, "%a: Invalid Address Width: 0x%lx\n", __func__, AddressWidth));
       Encoding = 0;
+      break;
   }
 
   return Encoding;
@@ -114,15 +114,19 @@ SmmuV3EncodeAddressWidth (
   @param [in]  SmmuBase   The base address of the SMMU.
   @param [in]  Register   The offset of the register.
 
-  @return The 32-bit value read from the register.
+  @return The 32-bit value read from the register. 0 if the SMMU base address is invalid.
 **/
 UINT32
-EFIAPI
 SmmuV3ReadRegister32 (
   IN UINT64  SmmuBase,
   IN UINT64  Register
   )
 {
+  if (SmmuBase == 0) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid SMMU base address\n", __func__));
+    return 0;
+  }
+
   return MmioRead32 (SmmuBase + Register);
 }
 
@@ -132,15 +136,19 @@ SmmuV3ReadRegister32 (
   @param [in]  SmmuBase   The base address of the SMMU.
   @param [in]  Register   The offset of the register.
 
-  @return The 64-bit value read from the register.
+  @return The 64-bit value read from the register. 0 if the SMMU base address is invalid.
 **/
 UINT64
-EFIAPI
 SmmuV3ReadRegister64 (
   IN UINT64  SmmuBase,
   IN UINT64  Register
   )
 {
+  if (SmmuBase == 0) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid SMMU base address\n", __func__));
+    return 0;
+  }
+
   return MmioRead64 (SmmuBase + Register);
 }
 
@@ -151,16 +159,20 @@ SmmuV3ReadRegister64 (
   @param [in]  Register   The offset of the register.
   @param [in]  Value      The 32-bit value to write.
 
-  @return The 32-bit value written to the register.
+  @return The 32-bit value written to the register, or 0 if the SMMU base address is invalid.
 **/
 UINT32
-EFIAPI
 SmmuV3WriteRegister32 (
   IN UINT64  SmmuBase,
   IN UINT64  Register,
   IN UINT32  Value
   )
 {
+  if (SmmuBase == 0) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid SMMU base address\n", __func__));
+    return 0;
+  }
+
   return MmioWrite32 (SmmuBase + Register, Value);
 }
 
@@ -171,16 +183,20 @@ SmmuV3WriteRegister32 (
   @param [in]  Register   The offset of the register.
   @param [in]  Value      The 64-bit value to write.
 
-  @return The 64-bit value written to the register.
+  @return The 64-bit value written to the register, or 0 if the SMMU base address is invalid.
 **/
 UINT64
-EFIAPI
 SmmuV3WriteRegister64 (
   IN UINT64  SmmuBase,
   IN UINT64  Register,
   IN UINT64  Value
   )
 {
+  if (SmmuBase == 0) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid SMMU base address\n", __func__));
+    return 0;
+  }
+
   return MmioWrite64 (SmmuBase + Register, Value);
 }
 
@@ -191,10 +207,10 @@ SmmuV3WriteRegister64 (
   @param [in]  ClearStaleErrors  Whether to clear stale errors.
 
   @retval EFI_SUCCESS            Success.
-  @retval Others                 Failure.
+  @retval EFI_INVALID_PARAMETER  Invalid Parameters.
+  @retval EFI_TIMEOUT            Timeout.
 **/
 EFI_STATUS
-EFIAPI
 SmmuV3DisableInterrupts (
   IN UINT64   SmmuBase,
   IN BOOLEAN  ClearStaleErrors
@@ -204,13 +220,18 @@ SmmuV3DisableInterrupts (
   SMMUV3_IRQ_CTRL  IrqControl;
   SMMUV3_GERROR    GlobalErrors;
 
+  if (SmmuBase == 0) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid SMMU base address\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
+
   IrqControl.AsUINT32 = SmmuV3ReadRegister32 (SmmuBase, SMMU_IRQ_CTRL);
   if ((IrqControl.AsUINT32 & SMMUV3_IRQ_CTRL_GLOBAL_PRIQ_EVTQ_EN_MASK) != 0) {
     IrqControl.AsUINT32 &= ~SMMUV3_IRQ_CTRL_GLOBAL_PRIQ_EVTQ_EN_MASK;
     SmmuV3WriteRegister32 (SmmuBase, SMMU_IRQ_CTRL, IrqControl.AsUINT32);
-    Status = SmmuV3Poll (SmmuBase + SMMU_IRQ_CTRLACK, SMMUV3_IRQ_CTRL_GLOBAL_PRIQ_EVTQ_EN_MASK, 0);
+    Status = SmmuV3Poll (SmmuBase, SMMU_IRQ_CTRLACK, SMMUV3_IRQ_CTRL_GLOBAL_PRIQ_EVTQ_EN_MASK, 0);
     if (Status != EFI_SUCCESS) {
-      DEBUG ((DEBUG_ERROR, "Error SmmuV3Poll: 0x%lx\n", SmmuBase + SMMU_IRQ_CTRLACK));
+      DEBUG ((DEBUG_ERROR, "%a: Error polling register: 0x%lx\n", __func__, SmmuBase + SMMU_IRQ_CTRLACK));
       return Status;
     }
   }
@@ -229,11 +250,11 @@ SmmuV3DisableInterrupts (
 
   @param [in]  SmmuBase  The base address of the SMMU.
 
-  @retval EFI_SUCCESS    Success.
-  @retval Others         Failure.
+  @retval EFI_SUCCESS            Success.
+  @retval EFI_INVALID_PARAMETER  Invalid Parameters.
+  @retval EFI_TIMEOUT            Timeout.
 **/
 EFI_STATUS
-EFIAPI
 SmmuV3EnableInterrupts (
   IN UINT64  SmmuBase
   )
@@ -241,14 +262,19 @@ SmmuV3EnableInterrupts (
   EFI_STATUS       Status;
   SMMUV3_IRQ_CTRL  IrqControl;
 
+  if (SmmuBase == 0) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid SMMU base address\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
+
   IrqControl.AsUINT32         = SmmuV3ReadRegister32 (SmmuBase, SMMU_IRQ_CTRL);
   IrqControl.AsUINT32        &= ~SMMUV3_IRQ_CTRL_GLOBAL_PRIQ_EVTQ_EN_MASK;
   IrqControl.GlobalErrorIrqEn = 1;
   IrqControl.EventqIrqEn      = 1;
   SmmuV3WriteRegister32 (SmmuBase, SMMU_IRQ_CTRL, IrqControl.AsUINT32);
-  Status = SmmuV3Poll (SmmuBase + SMMU_IRQ_CTRLACK, 0x5, 0x5);
+  Status = SmmuV3Poll (SmmuBase, SMMU_IRQ_CTRLACK, 0x5, 0x5);
   if (Status != EFI_SUCCESS) {
-    DEBUG ((DEBUG_ERROR, "Error SmmuV3Poll: 0x%lx\n", SmmuBase + SMMU_IRQ_CTRLACK));
+    DEBUG ((DEBUG_ERROR, "%a: Error polling register: 0x%lx\n", __func__, SmmuBase + SMMU_IRQ_CTRLACK));
   }
 
   return Status;
@@ -259,11 +285,11 @@ SmmuV3EnableInterrupts (
 
   @param [in]  SmmuBase  The base address of the SMMU.
 
-  @retval EFI_SUCCESS    Success.
-  @retval Others         Failure.
+  @retval EFI_SUCCESS            Success.
+  @retval EFI_INVALID_PARAMETER  Invalid Parameters.
+  @retval EFI_TIMEOUT            Timeout.
 **/
 EFI_STATUS
-EFIAPI
 SmmuV3DisableTranslation (
   IN UINT64  SmmuBase
   )
@@ -271,13 +297,18 @@ SmmuV3DisableTranslation (
   SMMUV3_CR0  Cr0;
   EFI_STATUS  Status;
 
+  if (SmmuBase == 0) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid SMMU base address\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
+
   Cr0.AsUINT32 = SmmuV3ReadRegister32 (SmmuBase, SMMU_CR0);
   if ((Cr0.AsUINT32 & SMMUV3_CR0_SMMU_CMDQ_EVTQ_PRIQ_EN_MASK) != 0) {
     Cr0.AsUINT32 = Cr0.AsUINT32 & ~SMMUV3_CR0_SMMU_CMDQ_EVTQ_PRIQ_EN_MASK;
     SmmuV3WriteRegister32 (SmmuBase, SMMU_CR0, Cr0.AsUINT32);
-    Status = SmmuV3Poll (SmmuBase + SMMU_CR0ACK, SMMUV3_CR0_SMMU_CMDQ_EVTQ_PRIQ_EN_MASK, 0);
+    Status = SmmuV3Poll (SmmuBase, SMMU_CR0ACK, SMMUV3_CR0_SMMU_CMDQ_EVTQ_PRIQ_EN_MASK, 0);
     if (Status != EFI_SUCCESS) {
-      DEBUG ((DEBUG_ERROR, "Error SmmuV3Poll: 0x%lx\n", SmmuBase + SMMU_CR0ACK));
+      DEBUG ((DEBUG_ERROR, "%a: Error polling register: 0x%lx\n", __func__, SmmuBase + SMMU_CR0ACK));
       return Status;
     }
   }
@@ -286,15 +317,15 @@ SmmuV3DisableTranslation (
 }
 
 /**
-  Initialise the SMMUv3 to set it in ABORT mode and stop DMA.
+  Set the Smmu in ABORT mode and stop DMA.
 
   @param [in]  SmmuReg    Base address of the SMMUv3.
 
-  @retval EFI_SUCCESS     Success.
-  @retval EFI_TIMEOUT     Timeout.
+  @retval EFI_SUCCESS            Success.
+  @retval EFI_INVALID_PARAMETER  Invalid Parameters.
+  @retval EFI_TIMEOUT            Timeout.
 **/
 EFI_STATUS
-EFIAPI
 SmmuV3GlobalAbort (
   IN  UINT64  SmmuBase
   )
@@ -302,29 +333,34 @@ SmmuV3GlobalAbort (
   EFI_STATUS  Status;
   UINT32      RegVal;
 
+  if (SmmuBase == 0) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid SMMU base address\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
+
   // Attribute update has completed when SMMU_(S)_GBPA.Update bit is 0.
-  Status = SmmuV3Poll (SmmuBase + SMMU_GBPA, SMMU_GBPA_UPDATE, 0);
+  Status = SmmuV3Poll (SmmuBase, SMMU_GBPA, SMMU_GBPA_UPDATE, 0);
   if (EFI_ERROR (Status)) {
     return Status;
   }
 
   // SMMU_(S)_CR0 resets to zero with all streams bypassing the SMMU,
   // so just abort all incoming transactions.
-  RegVal = MmioRead32 (SmmuBase + SMMU_GBPA);
+  RegVal = SmmuV3ReadRegister32 (SmmuBase, SMMU_GBPA);
 
   // Set the SMMU_GBPA.ABORT and SMMU_GBPA.UPDATE.
   RegVal |= (SMMU_GBPA_ABORT | SMMU_GBPA_UPDATE);
 
-  MmioWrite32 (SmmuBase + SMMU_GBPA, RegVal);
+  SmmuV3WriteRegister32 (SmmuBase, SMMU_GBPA, RegVal);
 
   // Attribute update has completed when SMMU_(S)_GBPA.Update bit is 0.
-  Status = SmmuV3Poll (SmmuBase + SMMU_GBPA, SMMU_GBPA_UPDATE, 0);
+  Status = SmmuV3Poll (SmmuBase, SMMU_GBPA, SMMU_GBPA_UPDATE, 0);
   if (EFI_ERROR (Status)) {
     return Status;
   }
 
   // Sanity check to see if abort is set
-  Status = SmmuV3Poll (SmmuBase + SMMU_GBPA, SMMU_GBPA_ABORT, SMMU_GBPA_ABORT);
+  Status = SmmuV3Poll (SmmuBase, SMMU_GBPA, SMMU_GBPA_ABORT, SMMU_GBPA_ABORT);
   if (EFI_ERROR (Status)) {
     return Status;
   }
@@ -333,15 +369,15 @@ SmmuV3GlobalAbort (
 }
 
 /**
-  Initialise the SMMUv3 to set Non-secure streams to bypass the SMMU.
+  Set all streams to bypass the SMMU.
 
   @param [in]  SmmuReg    Base address of the SMMUv3.
 
-  @retval EFI_SUCCESS     Success.
-  @retval EFI_TIMEOUT     Timeout.
+  @retval EFI_SUCCESS            Success.
+  @retval EFI_TIMEOUT            Timeout.
+  @retval EFI_INVALID_PARAMETER  Invalid Parameters.
 **/
 EFI_STATUS
-EFIAPI
 SmmuV3SetGlobalBypass (
   IN UINT64  SmmuBase
   )
@@ -349,14 +385,19 @@ SmmuV3SetGlobalBypass (
   EFI_STATUS  Status;
   UINT32      RegVal;
 
+  if (SmmuBase == 0) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid SMMU base address\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
+
   // Attribute update has completed when SMMU_(S)_GBPA.Update bit is 0.
-  Status = SmmuV3Poll (SmmuBase + SMMU_GBPA, SMMU_GBPA_UPDATE, 0);
+  Status = SmmuV3Poll (SmmuBase, SMMU_GBPA, SMMU_GBPA_UPDATE, 0);
   if (EFI_ERROR (Status)) {
     return Status;
   }
 
   // SMMU_(S)_CR0 resets to zero with all streams bypassing the SMMU
-  RegVal = MmioRead32 (SmmuBase + SMMU_GBPA);
+  RegVal = SmmuV3ReadRegister32 (SmmuBase, SMMU_GBPA);
 
   // TF-A configures the SMMUv3 to abort all incoming transactions.
   // Clear the SMMU_GBPA.ABORT to allow Non-secure streams to bypass
@@ -364,9 +405,9 @@ SmmuV3SetGlobalBypass (
   RegVal &= ~SMMU_GBPA_ABORT;
   RegVal |= SMMU_GBPA_UPDATE;
 
-  MmioWrite32 (SmmuBase + SMMU_GBPA, RegVal);
+  SmmuV3WriteRegister32 (SmmuBase, SMMU_GBPA, RegVal);
 
-  Status = SmmuV3Poll (SmmuBase + SMMU_GBPA, SMMU_GBPA_UPDATE, 0);
+  Status = SmmuV3Poll (SmmuBase, SMMU_GBPA, SMMU_GBPA_UPDATE, 0);
   if (EFI_ERROR (Status)) {
     return Status;
   }
@@ -377,16 +418,18 @@ SmmuV3SetGlobalBypass (
 /**
   Poll the SMMU register and test the value based on the mask.
 
-  @param [in]  SmmuReg    Base address of the SMMU register.
+  @param [in]  SmmuBase   Base address of the SMMU.
+  @param [in]  SmmuReg    The SMMU register to poll.
   @param [in]  Mask       Mask of register bits to monitor.
   @param [in]  Value      Expected value.
 
-  @retval EFI_SUCCESS     Success.
-  @retval EFI_TIMEOUT     Timeout.
+  @retval EFI_SUCCESS            Success.
+  @retval EFI_TIMEOUT            Timeout.
+  @retval EFI_INVALID_PARAMETER  Invalid Parameters.
 **/
 EFI_STATUS
-EFIAPI
 SmmuV3Poll (
+  IN UINT64  SmmuBase,
   IN UINT64  SmmuReg,
   IN UINT32  Mask,
   IN UINT32  Value
@@ -395,10 +438,15 @@ SmmuV3Poll (
   UINT32  RegVal;
   UINTN   Count;
 
+  if (SmmuBase == 0) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid SMMU base address\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
+
   // Set 1ms timeout value.
   Count = 10;
   do {
-    RegVal = MmioRead32 (SmmuReg);
+    RegVal = SmmuV3ReadRegister32 (SmmuBase, SmmuReg);
     if ((RegVal & Mask) == Value) {
       return EFI_SUCCESS;
     }
@@ -408,8 +456,9 @@ SmmuV3Poll (
 
   DEBUG ((
     DEBUG_ERROR,
-    "SmmuV3Poll: Timeout polling SMMUv3 register @%p Read value 0x%x "
+    "%a: Timeout polling SMMUv3 register @%p Read value 0x%x "
     "expected 0x%x\n",
+    __func__,
     SmmuReg,
     RegVal,
     ((Value == 0) ? (RegVal & ~Mask) : (RegVal | Mask))
@@ -420,18 +469,21 @@ SmmuV3Poll (
 
 /**
   Consume the event queue for errors and retrieve the fault record.
+  Clears the outputted FaultRecord if the queue is empty.
 
   @param [in]  SmmuInfo     Pointer to the SMMU_INFO structure.
   @param [out] FaultRecord  Pointer to the fault record structure.
+  @param [out] IsEmpty      Flag to indicate if the queue is empty.
 
-  @retval EFI_SUCCESS       Success.
-  @retval Others            Failure.
+  @retval EFI_SUCCESS            Success.
+  @retval EFI_TIMEOUT            Timeout.
+  @retval EFI_INVALID_PARAMETER  Invalid Parameters.
 **/
 EFI_STATUS
-EFIAPI
 SmmuV3ConsumeEventQueueForErrors (
   IN SMMU_INFO             *SmmuInfo,
-  OUT SMMUV3_FAULT_RECORD  *FaultRecord
+  OUT SMMUV3_FAULT_RECORD  *FaultRecord,
+  OUT BOOLEAN              *IsEmpty
   )
 {
   SMMUV3_EVENTQ_CONS   Consumer;
@@ -446,12 +498,17 @@ SmmuV3ConsumeEventQueueForErrors (
   UINT32               TotalQueueEntries;
   UINT32               WrapMask;
 
+  if ((SmmuInfo == NULL) || (FaultRecord == NULL)) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid Parameters\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
+
   TotalQueueEntries = SMMUV3_COUNT_FROM_LOG2 (SmmuInfo->EventQueueLog2Size);
   WrapMask          = TotalQueueEntries;
   QueueMask         = TotalQueueEntries - 1;
 
-  Producer.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase + 0x10000, SMMU_EVENTQ_PROD);
-  Consumer.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase + 0x10000, SMMU_EVENTQ_CONS);
+  Producer.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase + SMMUV3_PAGE_1_OFFSET, SMMU_EVENTQ_PROD);
+  Consumer.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase + SMMUV3_PAGE_1_OFFSET, SMMU_EVENTQ_CONS);
 
   ProducerIndex = Producer.WriteIndex & QueueMask;
   ProducerWrap  = Producer.WriteIndex & WrapMask;
@@ -465,9 +522,11 @@ SmmuV3ConsumeEventQueueForErrors (
                     );
 
   if (QueueEmpty != FALSE) {
+    *IsEmpty = TRUE;
     goto End;
   }
 
+  *IsEmpty  = FALSE;
   NextFault = SmmuInfo->EventQueue + ConsumerIndex;
   CopyMem (FaultRecord, NextFault, SMMUV3_EVENT_QUEUE_ENTRY_SIZE);
 
@@ -481,34 +540,50 @@ SmmuV3ConsumeEventQueueForErrors (
 
   ArmDataSynchronizationBarrier ();
 
-  SmmuV3WriteRegister32 (SmmuInfo->SmmuBase + 0x10000, SMMU_EVENTQ_CONS, Consumer.AsUINT32);
+  SmmuV3WriteRegister32 (SmmuInfo->SmmuBase + SMMUV3_PAGE_1_OFFSET, SMMU_EVENTQ_CONS, Consumer.AsUINT32);
 
 End:
   return EFI_SUCCESS;
 }
 
 /**
-  Print the errors from the SMMUv3. Prints Event Queue entries and GError register.
+  Log the errors if found from the SMMUv3. Prints Event Queue entries and GError register.
+  Does nothing if no errors found.
 
   @param [in]  SmmuInfo  Pointer to the SMMU_INFO structure.
 **/
 VOID
-EFIAPI
-SmmuV3PrintErrors (
+SmmuV3LogErrors (
   IN SMMU_INFO  *SmmuInfo
   )
 {
   SMMUV3_GERROR        GError;
-  SMMUV3_FAULT_RECORD  FaultRecord = { 0 };
+  SMMUV3_FAULT_RECORD  FaultRecord;
+  UINTN                Index;
+  BOOLEAN              IsEmpty;
+  EFI_STATUS           Status;
 
-  SmmuV3ConsumeEventQueueForErrors (SmmuInfo, &FaultRecord);
-  DEBUG ((DEBUG_INFO, "FaultRecord:\n"));
-  for (UINTN i = 0; i < sizeof (FaultRecord.Fault) / sizeof (FaultRecord.Fault[0]); i++) {
-    DEBUG ((DEBUG_INFO, "0x%llx\n", FaultRecord.Fault[i]));
+  if (SmmuInfo == NULL) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid Parameters\n", __func__));
+    return;
+  }
+
+  Status = SmmuV3ConsumeEventQueueForErrors (SmmuInfo, &FaultRecord, &IsEmpty);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: Error consuming event queue\n", __func__));
+  } else {
+    if (IsEmpty == FALSE) {
+      DEBUG ((DEBUG_ERROR, "%a: FaultRecord:\n", __func__));
+      for (Index = 0; Index < sizeof (FaultRecord.Fault) / sizeof (FaultRecord.Fault[0]); Index++) {
+        DEBUG ((DEBUG_ERROR, "0x%llx\n", FaultRecord.Fault[Index]));
+      }
+    }
   }
 
   GError.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase, SMMU_GERROR);
-  DEBUG ((DEBUG_INFO, "GError: 0x%lx\n", GError.AsUINT32));
+  if (GError.AsUINT32 != 0) {
+    DEBUG ((DEBUG_ERROR, "%a: GError: 0x%lx\n", __func__, GError.AsUINT32));
+  }
 }
 
 /**
@@ -518,13 +593,15 @@ SmmuV3PrintErrors (
   @param [in]  StartingIndex  The starting index in the command queue.
   @param [in]  CommandCount   The number of commands to write.
   @param [in]  Commands       Pointer to the commands to write.
+
+  @retval EFI_SUCCESS            Success.
+  @retval EFI_INVALID_PARAMETER  Invalid Parameters.
 **/
 STATIC
-VOID
-EFIAPI
+EFI_STATUS
 SmmuV3WriteCommands (
   IN SMMU_INFO           *SmmuInfo,
-  IN UINT64              StartingIndex,
+  IN UINT32              StartingIndex,
   IN UINT32              CommandCount,
   IN SMMUV3_CMD_GENERIC  *Commands
   )
@@ -535,6 +612,11 @@ SmmuV3WriteCommands (
   UINT32              WrapMask;
   SMMUV3_CMD_GENERIC  *CommandQueue;
 
+  if ((SmmuInfo == NULL) || (Commands == NULL) || (CommandCount == 0)) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid Parameters\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
+
   WrapMask     = (1UL << SmmuInfo->CommandQueueLog2Size);
   QueueMask    = WrapMask - 1;
   CommandQueue = (SMMUV3_CMD_GENERIC *)SmmuInfo->CommandQueue;
@@ -542,19 +624,21 @@ SmmuV3WriteCommands (
     ProducerIndex               = (UINT32)((StartingIndex + Index) & QueueMask);
     CommandQueue[ProducerIndex] = Commands[Index];
   }
+
+  return EFI_SUCCESS;
 }
 
 /**
-  Send a command to the SMMUv3.
+  Send a SMMUV3_CMD_GENERIC command to the SMMUv3.
 
   @param [in]  SmmuInfo  Pointer to the SMMU_INFO structure.
   @param [in]  Command   Pointer to the command to send.
 
-  @retval EFI_SUCCESS    Success.
-  @retval EFI_TIMEOUT    Timeout.
+  @retval EFI_SUCCESS            Success.
+  @retval EFI_TIMEOUT            Timeout.
+  @retval EFI_INVALID_PARAMETER  Invalid Parameters.
 **/
 EFI_STATUS
-EFIAPI
 SmmuV3SendCommand (
   IN SMMU_INFO           *SmmuInfo,
   IN SMMUV3_CMD_GENERIC  *Command
@@ -571,6 +655,12 @@ SmmuV3SendCommand (
   SMMUV3_CMDQ_PROD  Producer;
   SMMUV3_CMDQ_CONS  Consumer;
   UINT8             Count;
+  EFI_STATUS        Status;
+
+  if ((SmmuInfo == NULL) || (Command == NULL)) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid Parameters\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
 
   // Set 1ms timeout value.
   Count = 10;
@@ -615,11 +705,15 @@ SmmuV3SendCommand (
                          ConsumerWrap
                          ) != FALSE))
   {
-    DEBUG ((DEBUG_ERROR, "Command Queue Full, Timeout\n"));
+    DEBUG ((DEBUG_ERROR, "%a: Command Queue Full, Timeout\n", __func__));
     return EFI_TIMEOUT;
   }
 
-  SmmuV3WriteCommands (SmmuInfo, ProducerIndex, 1, Command);
+  Status = SmmuV3WriteCommands (SmmuInfo, ProducerIndex, 1, Command);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: Error writing command to queue\n", __func__));
+    return Status;
+  }
 
   ArmDataSynchronizationBarrier ();
 
@@ -641,9 +735,9 @@ SmmuV3SendCommand (
   }
 
   if ((Count == 0) && (Consumer.ReadIndex < Producer.WriteIndex)) {
-    DEBUG ((DEBUG_ERROR, "Timeout waiting for command queue to be consumed\n"));
+    DEBUG ((DEBUG_ERROR, "%a: Timeout waiting for command queue to be consumed\n", __func__));
     return EFI_TIMEOUT;
   }
 
-  return EFI_SUCCESS;
+  return Status;
 }

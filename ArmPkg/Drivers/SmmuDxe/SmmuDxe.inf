@@ -1,10 +1,10 @@
 ## @file  SmmuDxe.inf
-# Smmu Dxe driver - used to enable dma remapping via the IoMmu.
-# This driver initializes the SmmuV3 hardware to enable stage 2 translation and dma remapping.
+# Smmu Dxe driver - used to enable DMA remapping via the IoMmu.
+# This driver initializes the SmmuV3 hardware to enable stage 2 translation and DMA remapping.
 # The IOMMU protocol is implemented assuming a 4-level Page Table Structure.
 # The Page Table Root address is used to configure the Stream Table to enable the SMMU for stage 2 translation.
 #
-# For more info See README.md
+# For more info see README.md
 #
 # Copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -24,7 +24,7 @@
   SmmuV3Util.c
 
 [Guids]
-  gSmmuConfigGuid
+  gSmmuConfigHobGuid
   gEfiEventExitBootServicesGuid
 
 [Packages]
@@ -42,9 +42,9 @@
   TimerLib
   UefiDriverEntryPoint
 
-[Depex]
-  gEfiAcpiTableProtocolGuid                       ## CONSUMES
-
 [Protocols]
   gEdkiiIoMmuProtocolGuid                         ## PRODUCES
+  gEfiAcpiTableProtocolGuid                       ## CONSUMES
+
+[Depex]
   gEfiAcpiTableProtocolGuid                       ## CONSUMES

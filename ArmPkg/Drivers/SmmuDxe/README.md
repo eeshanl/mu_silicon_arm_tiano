@@ -48,6 +48,9 @@ SMMU Hardware
 
 ### DMA Mapping
 
+- Maintains a 4-level page table to map HostAddress and DeviceAddress
+- Identity Mapped
+
 1. **IoMmu Map**:
 
     ```c
@@ -180,6 +183,7 @@ Current implementation constraints:
 2. 48-bit address space limit
 3. Stage 2 translation only
 4. Identity mapped page tables
+5. Linear Stream Table
 
 ## Future Enhancements
 
@@ -189,23 +193,19 @@ Potential improvements:
 2. Stage 1 translation
 3. Different page table mapping schemes
 4. Updated IoMmu Protocol to optimize redundencies
+5. 2-level Stream Tables
 
 ## Relevant Docs
 
 - SMMUv3 specification <https://developer.arm.com/documentation/ihi0070/latest/>
+- Useful ARM SMMU documentation - <https://developer.arm.com/documentation/109242/0100/Programming-the-SMMU>
+- Arm AArch64 memory manegemnt guide - <https://developer.arm.com/documentation/101811/0104>
 - ARM a_a-profile_architecture_reference_manual <https://developer.arm.com/documentation/102105/ka-07>
 - Intel IOMMU for DMA protection in UEFI <https://www.intel.com/content/dam/develop/external/us/en/documents/intel-whitepaper-using-iommu-for-dma-protection-in-uefi.pdf>
 - IORT documentation <https://developer.arm.com/documentation/den0049/latest/>
 
 ## Notes
 
-Qemu Version:
+Integration with Qemu:
 
-- Qemu Smmu is supported on this sha - a53b931645183bd0c15dd19ae0708fc3c81ecf1d
-- Qemu emulator version 9.1.50 (v9.1.0-475-ga53b931645)
-
-TFA Version:
-
-- chery-pick:
-<https://github.com/ARM-software/arm-trusted-firmware/commit/42925c15bee09162c6dfc8c2204843ffac6201c1#diff-efe8a973d827b75aa34a8b6fd065bc9a7ffd33290d4a73697797e24e56460ae2R76>
-in Silicon/Arm/TFA - 42925c15bee09162c6dfc8c2204843ffac6201c1
+- SMMU is supported on Qemu but on v9.1.50+ <https://gitlab.com/qemu-project/qemu>
