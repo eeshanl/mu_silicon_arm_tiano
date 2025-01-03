@@ -443,7 +443,7 @@ SmmuV3Poll (
     return EFI_INVALID_PARAMETER;
   }
 
-  // Set 1ms timeout value.
+  // Set 0.1ms timeout value.
   Count = 10;
   do {
     RegVal = SmmuV3ReadRegister32 (SmmuBase, SmmuReg);
@@ -451,7 +451,7 @@ SmmuV3Poll (
       return EFI_SUCCESS;
     }
 
-    MicroSecondDelay (100);
+    MicroSecondDelay (10);
   } while ((--Count) > 0);
 
   DEBUG ((
@@ -662,8 +662,7 @@ SmmuV3SendCommand (
     return EFI_INVALID_PARAMETER;
   }
 
-  // Set 1ms timeout value.
-  Count = 10;
+  Count = 10; // Set 0.1ms timeout value.
 
   Producer.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase, SMMU_CMDQ_PROD);
   Consumer.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase, SMMU_CMDQ_CONS);
@@ -684,7 +683,7 @@ SmmuV3SendCommand (
                         ConsumerWrap
                         ) != FALSE)
   {
-    MicroSecondDelay (100);
+    MicroSecondDelay (10);
 
     Producer.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase, SMMU_CMDQ_PROD);
     Consumer.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase, SMMU_CMDQ_CONS);
@@ -725,11 +724,11 @@ SmmuV3SendCommand (
   SmmuV3WriteRegister32 (SmmuInfo->SmmuBase, SMMU_CMDQ_PROD, Producer.AsUINT32);
 
   Consumer.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase, SMMU_CMDQ_CONS);
-  Count             = 10;
+  Count             = 10; // Set 0.1ms timeout value
 
   // Wait for the command to be consumed
   while (Count > 0 && Consumer.ReadIndex < Producer.WriteIndex) {
-    MicroSecondDelay (100);
+    MicroSecondDelay (10);
     Consumer.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase, SMMU_CMDQ_CONS);
     Count--;
   }
