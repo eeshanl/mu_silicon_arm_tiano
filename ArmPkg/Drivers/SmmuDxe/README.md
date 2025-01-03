@@ -156,6 +156,44 @@ The IOMMU protocol provides several protection mechanisms:
 3. **Error Handling**:
    - Translation faults logged to Event Queue
 
+## Continuous Protection Through the OS
+
+### SMMU Initialization Pre-DXE
+
+To ensure continuous protection, the SMMU should be set in abort mode during the pre-DXE phase. This means that the SMMU
+will block all transactions unless explicitly configured to allow them. This setup ensures that no unauthorized DMA
+operations can occur before the SMMU is fully configured.
+
+### Interaction with PcdDisableBMEonEBS
+
+The PcdDisableBMEonEBS (Disable Bus Master Enable on Exit Boot Services) setting plays a crucial role in maintaining
+system security during the transition from firmware to the operating system.
+
+The following steps outline the end-to-end interaction:
+
+1. Pre-DXE Initialization:
+
+   The SMMU is set to abort mode to block all transactions. This ensures that no DMA operations can bypass the SMMU's
+   protection mechanisms.
+
+2. DMA Remapping with SMMU:
+
+   If DMA remapping is required, the SMMU is configured to translate addresses and manage memory protection.
+   The SMMU's page tables and stream tables are set up to allow only authorized DMA operations.
+
+3. Exit Boot Services (EBS):
+
+   On exit boot services, the SMMU is set to global bypass mode along with disabling the Bus Master Enable (BME) bit.
+   The PcdDisableBMEonEBS PCD is used to disable the Bus Master Enable (BME) bit.
+   This prevents any PCI devices from initiating DMA operations until the operating system reconfigures the SMMU.
+
+4. OS Reconfiguration:
+
+   The operating system reconfigures the SMMU as needed for its own DMA remapping and memory protection requirements.
+   By following these steps, the system ensures that the SMMU provides continuous protection from the pre-DXE phase
+   through to the operating system's reconfiguration. This approach helps prevent unauthorized DMA operations and
+   maintains system security.
+
 ## Performance Features
 
 The implementation includes optimizations for:
@@ -163,7 +201,7 @@ The implementation includes optimizations for:
 1. **Integration of SmmuV3 with IOMMU Protocol**
 
 2. **TLB Management**:
-   - TLB invalidation for unmapped entries
+   - TLB invalidation for unmapped entries via the command queue
 
 ## Configuration Options
 
@@ -182,18 +220,19 @@ Current implementation constraints:
 1. Fixed 4KB granule size
 2. 48-bit address space limit
 3. Stage 2 translation only
-4. Identity mapped page tables
-5. Linear Stream Table
+   - Stage 2 is used on its own to simplify the translation process and use a linear stream table.
+4. Linear Stream Table
+5. Identity mapped page tables
 
 ## Future Enhancements
 
 Potential improvements:
 
 1. Multiple translation granule support
-2. Stage 1 translation
-3. Different page table mapping schemes
-4. Updated IoMmu Protocol to optimize redundencies
-5. 2-level Stream Tables
+2. Stage 1 & 2 translation
+3. 2-level Stream Tables
+4. Different page table mapping schemes
+5. Updated IoMmu Protocol to optimize redundencies
 
 ## Relevant Docs
 

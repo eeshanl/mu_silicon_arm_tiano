@@ -195,10 +195,11 @@ PageTableDeInit (
   }
 
   for (Index = 0; Index < PAGE_TABLE_SIZE; Index++) {
-    PageTableEntry  Entry = PageTable->Entries[Index];
+    PageTableEntry  Entry             = PageTable->Entries[Index];
+    PAGE_TABLE      *PageTableAddress = (PAGE_TABLE *)((UINTN)Entry & ~PAGE_TABLE_BLOCK_OFFSET);
 
     if (Entry != 0) {
-      PageTableDeInit (Level + 1, (PAGE_TABLE *)((UINTN)Entry & ~PAGE_TABLE_BLOCK_OFFSET));
+      PageTableDeInit (Level + 1, PageTableAddress);
     }
   }
 
@@ -329,14 +330,12 @@ SmmuV3BuildStreamTable (
   Idr1.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase, SMMU_IDR1);
   Idr5.AsUINT32 = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase, SMMU_IDR5);
 
-  // 0x6 = stage2 translate stage1 bypass
-  // 0x4 == stage2 bypass stage1 bypass
   StreamEntry->Config = SMMUV3_STREAM_TABLE_ENTRY_CONFIG_STAGE_2_TRANSLATE_STAGE_1_BYPASS;
-  StreamEntry->Eats   = SMMUV3_STREAM_TABLE_ENTRY_EATS_NOT_SUPPORTED; // ATS not supported
-  StreamEntry->S2Vmid = SMMUV3_STREAM_TABLE_ENTRY_S2VMID;             // Domain->Vmid; Choose a non-zero value
-  StreamEntry->S2Tg   = SMMUV3_STREAM_TABLE_ENTRY_S2TG_4KB;           // 4KB granule size
-  StreamEntry->S2Aa64 = 1;                                            // AArch64 S2 translation tables
-  StreamEntry->S2Ttb  = (UINT64)(UINTN)SmmuInfo->PageTableRoot >> SMMUV3_STREAM_TABLE_ENTRY_S2TTB_OFFSET;
+  StreamEntry->Eats   = SMMUV3_STREAM_TABLE_ENTRY_EATS_NOT_SUPPORTED;
+  StreamEntry->S2Vmid = SMMUV3_STREAM_TABLE_ENTRY_S2VMID;             // Choose a non-zero value
+  StreamEntry->S2Tg   = SMMUV3_STREAM_TABLE_ENTRY_S2TG_4KB;
+  StreamEntry->S2Aa64 = 1;                                                                                // AArch64 S2 translation tables
+  StreamEntry->S2Ttb  = (UINT64)(UINTN)SmmuInfo->PageTableRoot >> SMMUV3_STREAM_TABLE_ENTRY_S2TTB_OFFSET; // Page table root address
   if ((Idr0.S1p == 1) && (Idr0.S2p == 1)) {
     StreamEntry->S2Ptw = SMMUV3_STREAM_TABLE_ENTRY_S2PTW;
   }
@@ -875,12 +874,21 @@ SmmuV3ExitBootServices (
   )
 {
   EFI_STATUS  Status;
+  EFI_TPL     OldTpl;
 
   if (Event == NULL) {
     DEBUG ((DEBUG_ERROR, "%a: Invalid Event\n", __func__));
     ASSERT (Event != NULL);
     return;
   }
+
+  if (mSmmu == NULL) {
+    DEBUG ((DEBUG_ERROR, "%a: SMMU_INFO structure is NULL\n", __func__));
+    ASSERT (mSmmu != NULL);
+    return;
+  }
+
+  OldTpl = gBS->RaiseTPL (TPL_NOTIFY);
 
   Status = SmmuV3DisableTranslation (mSmmu->SmmuBase);
   if (EFI_ERROR (Status)) {
@@ -894,6 +902,7 @@ SmmuV3ExitBootServices (
     ASSERT_EFI_ERROR (Status);
   }
 
+  gBS->RestoreTPL (OldTpl);
   gBS->CloseEvent (Event);
 }
 
@@ -947,7 +956,7 @@ InitializeSmmuDxe (
   // Create an event callback to disable SMMUv3 translation and set global abort during ExitBootServices
   Status = gBS->CreateEventEx (
                   EVT_NOTIFY_SIGNAL,
-                  TPL_NOTIFY,
+                  TPL_CALLBACK,
                   SmmuV3ExitBootServices,
                   NULL,
                   &gEfiEventExitBootServicesGuid,
