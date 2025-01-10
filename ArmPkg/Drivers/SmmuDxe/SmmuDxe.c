@@ -784,6 +784,43 @@ GetSmmuConfigHobData (
 }
 
 /**
+  Check if the SMMU_CONFIG structure is compatible with the current driver version.
+  Backwards compatibility is currently not supported.
+
+  @param [in] SmmuConfig  Pointer to the SMMU_CONFIG structure.
+
+  @retval EFI_SUCCESS               Success.
+  @retval EFI_INVALID_PARAMETER     Invalid parameter.
+  @retval EFI_INCOMPATIBLE_VERSION  Incompatible version.
+**/
+STATIC
+EFI_STATUS
+CheckSmmuConfigVersion (
+  IN SMMU_CONFIG  *SmmuConfig
+  )
+{
+  if (SmmuConfig == NULL) {
+    DEBUG ((DEBUG_ERROR, "%a: SMMU_CONFIG structure is NULL\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
+
+  if ((SmmuConfig->VersionMajor == CURRENT_SMMU_CONFIG_VERSION_MAJOR) && (SmmuConfig->VersionMinor == CURRENT_SMMU_CONFIG_VERSION_MINOR)) {
+    return EFI_SUCCESS;
+  }
+
+  DEBUG ((
+    DEBUG_ERROR,
+    "%a: SMMU_CONFIG version mismatch. Expected: %u.%u Got: %u.%u\n",
+    __func__,
+    CURRENT_SMMU_CONFIG_VERSION_MAJOR,
+    CURRENT_SMMU_CONFIG_VERSION_MINOR,
+    SmmuConfig->VersionMajor,
+    SmmuConfig->VersionMinor
+    ));
+  return EFI_INCOMPATIBLE_VERSION;
+}
+
+/**
   Initialize the SMMU_INFO structure.
 
   @param [in] SmmuBase The base address of the SMMU.
@@ -915,14 +952,15 @@ SmmuV3ExitBootServices (
   @param [in] ImageHandle    The firmware allocated handle for the EFI image.
   @param [in] SystemTable    A pointer to the EFI System Table.
 
-  @retval EFI_SUCCESS            The entry point is executed successfully.
-  @retval EFI_OUT_OF_RESOURCES   Not enough resources to initialize the driver.
-  @retval EFI_NOT_FOUND          The SMMU configuration data is not found.
-  @retval EFI_INVALID_PARAMETER  Invalid parameter.
-  @retval EFI_OUT_OF_RESOURCES   Out of resources.
-  @retval EFI_TIMEOUT            Timeout.
-  @retval EFI_DEVICE_ERROR       Device error.
-  @retval Others                 Some error occurs when executing this entry point.
+  @retval EFI_SUCCESS               The entry point is executed successfully.
+  @retval EFI_OUT_OF_RESOURCES      Not enough resources to initialize the driver.
+  @retval EFI_NOT_FOUND             The SMMU configuration data is not found.
+  @retval EFI_INVALID_PARAMETER     Invalid parameter.
+  @retval EFI_OUT_OF_RESOURCES      Out of resources.
+  @retval EFI_TIMEOUT               Timeout.
+  @retval EFI_DEVICE_ERROR          Device error.
+  @retval EFI_INCOMPATIBLE_VERSION  Incompatible version.
+  @retval Others                    Some error occurs when executing this entry point.
 **/
 EFI_STATUS
 InitializeSmmuDxe (
@@ -940,6 +978,13 @@ InitializeSmmuDxe (
   if (SmmuConfig == NULL) {
     DEBUG ((DEBUG_ERROR, "%a: Failed to get SMMU config data from gSmmuConfigHobGuid\n", __func__));
     return EFI_NOT_FOUND;
+  }
+
+  // Check SMMU_CONFIG version, return error if incompatible. Backwards compatibility not supported.
+  Status = CheckSmmuConfigVersion (SmmuConfig);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: SMMU_CONFIG version check failed\n", __func__));
+    return Status;
   }
 
   // Check if ACPI Table Protocol has been installed

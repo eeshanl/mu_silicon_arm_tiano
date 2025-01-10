@@ -20,10 +20,21 @@
 
 #include <IndustryStandard/IoRemappingTable.h>
 
-/* See <https://developer.arm.com/documentation/den0049/latest/> for IORT spec for
-   information on the IORT ACPI node structure. Platform must populate all the below
-   ACPI structures to pass the SMMU configuration data to the SMMU driver.
-   See IoRemappingTable.h for definitions of the below sub-structures.
+/*
+  The needs/requirements of the SMMU and ACPI/IORT node configuration may vary between new and existing platforms, modify the SMMU_CONFIG structure as needed.
+  Increment SMMU_CONFIG version when the structure changes.
+  Backwards compatibility is currently not supported.
+  Future backwards compatibility is only possible if new fields are added to the end of the structure and existing fields are not modified.
+  SmmuDxe driver will check and enforce the version of the SMMU_CONFIG structure to this current version set here.
+*/
+#define CURRENT_SMMU_CONFIG_VERSION_MAJOR  0
+#define CURRENT_SMMU_CONFIG_VERSION_MINOR  7
+
+/*
+  See <https://developer.arm.com/documentation/den0049/latest/> for IORT spec for
+  information on the IORT ACPI node structure. Platform must populate all the below
+  ACPI structures to pass the SMMU configuration data to the SMMU driver.
+  See IoRemappingTable.h for definitions of the below sub-structures.
 */
 
 #pragma pack(push, 1)
@@ -52,9 +63,9 @@ typedef struct _PLATFORM_IO_REMAPPING_STRUCTURE {
 
 // SMMU_CONFIG structure to pass the SMMU configuration data from the platform to the SMMU driver.
 typedef struct _SMMU_CONFIG {
-  PLATFORM_IO_REMAPPING_STRUCTURE    Config;
   UINT32                             VersionMajor;
   UINT32                             VersionMinor;
+  PLATFORM_IO_REMAPPING_STRUCTURE    Config;
 } SMMU_CONFIG;
 
 #pragma pack(pop)

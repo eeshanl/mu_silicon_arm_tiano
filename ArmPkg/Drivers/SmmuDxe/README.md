@@ -97,14 +97,7 @@ SMMU Hardware
 
 ## SMMU Configuration
 
-### 1. PlatformPeiLib
-
-The Platform will construct a SMMU config HOB in PEI:
-
-- Essentialy the same as IORT we want to publish
-- This structure is consumed by SmmuDxe to configure the SMMU hardware
-
-### 2. SMMUv3 Hardware Setup
+### 1. SMMUv3 Hardware Setup
 
 The SMMU is configured in stage 2 translation mode with:
 
@@ -113,7 +106,7 @@ The SMMU is configured in stage 2 translation mode with:
 - Event queue for error handling
 - 4KB translation granule
 
-### 3. Page Table Structure
+### 2. Page Table Structure
 
 The IOMMU uses a 4-level page table structure for DMA address translation:
 <https://developer.arm.com/documentation/101811/0104/Translation-granule/The-starting-level-of-address-translation>
@@ -130,7 +123,7 @@ Level 3 Table (L3)
 Physical Page
 ```
 
-### 4. Address Translation Process
+### 3. Address Translation Process
 
 1. **Device Issues DMA**:
    - Device uses IOVA (I/O Virtual Address)
@@ -243,8 +236,16 @@ Potential improvements:
 - Intel IOMMU for DMA protection in UEFI <https://www.intel.com/content/dam/develop/external/us/en/documents/intel-whitepaper-using-iommu-for-dma-protection-in-uefi.pdf>
 - IORT documentation <https://developer.arm.com/documentation/den0049/latest/>
 
-## Notes
+## Integration Instructions
 
 Integration with Qemu:
 
 - SMMU is supported on Qemu but on v9.1.50+ <https://gitlab.com/qemu-project/qemu>
+
+Platform Integration:
+
+- The Platform will construct a SMMU config HOB in PEI:
+- Essentialy the same as IORT we want to publish
+- The SMMU expects the entire IORT data to be passed into a HOB gSmmuConfigHobGuid.
+- The platform must create the IORT structure and create gSmmuConfigHobGuid with that data using BuildGuidDataHob.
+- This structure is consumed by SmmuDxe to configure the SMMU hardware
