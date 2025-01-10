@@ -476,7 +476,6 @@ SmmuV3Poll (
   @param [out] IsEmpty      Flag to indicate if the queue is empty.
 
   @retval EFI_SUCCESS            Success.
-  @retval EFI_TIMEOUT            Timeout.
   @retval EFI_INVALID_PARAMETER  Invalid Parameters.
 **/
 EFI_STATUS
@@ -498,7 +497,7 @@ SmmuV3ConsumeEventQueueForErrors (
   UINT32               TotalQueueEntries;
   UINT32               WrapMask;
 
-  if ((SmmuInfo == NULL) || (FaultRecord == NULL)) {
+  if ((SmmuInfo == NULL) || ((FaultRecord == NULL) || (IsEmpty == NULL))) {
     DEBUG ((DEBUG_ERROR, "%a: Invalid Parameters\n", __func__));
     return EFI_INVALID_PARAMETER;
   }

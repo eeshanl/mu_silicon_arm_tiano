@@ -125,9 +125,9 @@
 #define SMMUV3_CR0_VMW_DISABLED             0                // Disable VMID wildcard matching
 #define SMMUV3_CR0_ATS_CHK_DISABLE          1                // Disable bypass for ATS translated traffic
 
-typedef UINT64 PageTableEntry;
+typedef UINT64 PAGE_TABLE_ENTRY;
 
-#define PAGE_TABLE_SIZE  EFI_PAGE_SIZE / sizeof(PageTableEntry)  // Number of entries in a page table
+#define PAGE_TABLE_SIZE  EFI_PAGE_SIZE / sizeof(PAGE_TABLE_ENTRY)  // Number of entries in a page table
 
 typedef enum _SMMU_ADDRESS_SIZE_TYPE {
   SmmuAddressSize32Bit = 0,
@@ -141,7 +141,7 @@ typedef enum _SMMU_ADDRESS_SIZE_TYPE {
 
 // Page Table Structure used by SMMU
 typedef struct _PAGE_TABLE {
-  PageTableEntry    Entries[PAGE_TABLE_SIZE];
+  PAGE_TABLE_ENTRY    Entries[PAGE_TABLE_SIZE];
 } PAGE_TABLE;
 
 // General SMMU Information for a SMMU instance

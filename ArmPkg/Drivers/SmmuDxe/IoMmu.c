@@ -37,7 +37,7 @@ typedef struct IOMMU_MAP_INFO {
   Update the flags of a page table entry per Arm Architecture Reference Manual for A profile.
   <https://developer.arm.com/documentation/102105/ka-07>
 
-  The bottom 12 bits of a PageTableEntry, such as R/W, Access Flags, Valid flags, can be set or cleared. Only allows clearing of R/W bits
+  The bottom 12 bits of a PAGE_TABLE_ENTRY, such as R/W, Access Flags, Valid flags, can be set or cleared. Only allows clearing of R/W bits
 
   @param [in]  Table                  Pointer to the page table.
   @param [in]  SetReadWriteFlagsOnly  Boolean to indicate if only R/W flags should be set.
@@ -143,7 +143,7 @@ UpdateMapping (
 
       ZeroMem ((VOID *)NewPage, EFI_PAGE_SIZE);
 
-      Current->Entries[Index] = (PageTableEntry)(UINTN)NewPage;
+      Current->Entries[Index] = (PAGE_TABLE_ENTRY)(UINTN)NewPage;
     }
 
     if (!SetReadWriteFlagsOnly) {

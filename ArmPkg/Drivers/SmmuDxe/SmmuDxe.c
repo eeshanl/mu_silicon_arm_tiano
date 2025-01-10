@@ -195,8 +195,8 @@ PageTableDeInit (
   }
 
   for (Index = 0; Index < PAGE_TABLE_SIZE; Index++) {
-    PageTableEntry  Entry             = PageTable->Entries[Index];
-    PAGE_TABLE      *PageTableAddress = (PAGE_TABLE *)((UINTN)Entry & ~PAGE_TABLE_BLOCK_OFFSET);
+    PAGE_TABLE_ENTRY  Entry             = PageTable->Entries[Index];
+    PAGE_TABLE        *PageTableAddress = (PAGE_TABLE *)((UINTN)Entry & ~PAGE_TABLE_BLOCK_OFFSET);
 
     if (Entry != 0) {
       PageTableDeInit (Level + 1, PageTableAddress);
