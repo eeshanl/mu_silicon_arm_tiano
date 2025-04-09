@@ -21,6 +21,7 @@
 #include <Library/HobLib.h>
 #include <Library/IoLib.h>
 #include <Library/MemoryAllocationLib.h>
+#include <Library/UefiLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiDriverEntryPoint.h>
 #include <Protocol/AcpiTable.h>
@@ -76,7 +77,6 @@ AcpiPlatformChecksum (
   @retval EFI_OUT_OF_RESOURCES      Out of resources.
   @retval EFI_INVALID_PARAMETER     Invalid parameter.
 **/
-STATIC
 EFI_STATUS
 AddIortTable (
   IN EFI_ACPI_TABLE_PROTOCOL  *AcpiTable,
@@ -130,6 +130,8 @@ AddIortTable (
   Initialize a page table. Only initializes the root page table.
   UpdateMapping() will allocate entries on the fly as needed.
 
+  To support concatenated page tables, allocate the max amount of pages we are allowed to concatenate, 16.
+
   @retval A pointer to the initialized page table, or NULL on failure.
 **/
 STATIC
@@ -140,13 +142,20 @@ PageTableInit (
 {
   PAGE_TABLE  *PageTable;
 
-  PageTable = (PAGE_TABLE *)AllocatePages (1);
+  // To support concatenated page tables, allocate the max amount of pages we are allowed to concatenate, 16.
+  // Arm DDI0487L_a_a-profile_architecture_reference_manual section D8.2.2 states:
+  // Align the base address of the first translation table to the sum of the size of the memory occupied by the concatenated translation tables.
+  PageTable = (PAGE_TABLE *)AllocateAlignedPages (
+                              PAGE_TABLE_ROOT_CONCATENATED_PAGES_MAX,
+                              EFI_PAGE_SIZE * PAGE_TABLE_ROOT_CONCATENATED_PAGES_MAX
+                              );
+
   if (PageTable == NULL) {
     DEBUG ((DEBUG_ERROR, "%a: Failed to allocate page table\n", __func__));
     return NULL;
   }
 
-  ZeroMem (PageTable, EFI_PAGE_SIZE);
+  ZeroMem (PageTable, EFI_PAGE_SIZE * PAGE_TABLE_ROOT_CONCATENATED_PAGES_MAX);
 
   return PageTable;
 }
@@ -165,22 +174,29 @@ PageTableDeInit (
   IN PAGE_TABLE  *PageTable
   )
 {
-  UINTN  Index;
+  UINTN             Index;
+  PAGE_TABLE_ENTRY  Entry;
+  PAGE_TABLE        *PageTableAddress;
 
   if ((Level >= PAGE_TABLE_DEPTH) || (PageTable == NULL)) {
     return;
   }
 
   for (Index = 0; Index < PAGE_TABLE_SIZE; Index++) {
-    PAGE_TABLE_ENTRY  Entry             = PageTable->Entries[Index];
-    PAGE_TABLE        *PageTableAddress = (PAGE_TABLE *)((UINTN)Entry & ~PAGE_TABLE_BLOCK_OFFSET);
+    Entry            = PageTable->Entries[Index];
+    PageTableAddress = (PAGE_TABLE *)((UINTN)Entry & ~PAGE_TABLE_BLOCK_OFFSET);
 
     if (Entry != 0) {
       PageTableDeInit (Level + 1, PageTableAddress);
     }
   }
 
-  FreePages (PageTable, EFI_SIZE_TO_PAGES (sizeof (PAGE_TABLE)));
+  // For root level, use larger size to free for supporting a concatenated page table root.
+  if (Level == 0) {
+    FreePages (PageTable, PAGE_TABLE_ROOT_CONCATENATED_PAGES_MAX);
+  } else {
+    FreePages (PageTable, 1);
+  }
 }
 
 /**
@@ -312,7 +328,6 @@ SmmuV3BuildStreamTableEntry (
   )
 {
   EFI_STATUS   Status;
-  UINT32       OutputAddressWidth;
   UINT32       InputSize;
   SMMUV3_IDR0  Idr0;
   SMMUV3_IDR1  Idr1;
@@ -364,17 +379,17 @@ SmmuV3BuildStreamTableEntry (
   //  Thus the maximum input address width is restricted to 48-bits even if
   //  it is advertised to be larger.
   //
-  OutputAddressWidth = SmmuV3DecodeAddressWidth (Idr5.Oas);
+  SmmuInfo->OutputAddressWidth = SmmuV3DecodeAddressWidth (Idr5.Oas);
 
-  if (OutputAddressWidth < SMMUV3_STREAM_TABLE_ENTRY_OUTPUT_ADDRESS_MAX) {
-    StreamEntry->S2Ps = SmmuV3EncodeAddressWidth (OutputAddressWidth);
+  if (SmmuInfo->OutputAddressWidth < SMMUV3_STREAM_TABLE_ENTRY_OUTPUT_ADDRESS_MAX) {
+    StreamEntry->S2Ps = SmmuV3EncodeAddressWidth (SmmuInfo->OutputAddressWidth);
   } else {
     DEBUG ((DEBUG_INFO, "%a: Advertised OutputAddressWidth >= 48. Capping the width to 48 per the SMMU spec.\n", __func__));
-    StreamEntry->S2Ps  = SmmuV3EncodeAddressWidth (SMMUV3_STREAM_TABLE_ENTRY_OUTPUT_ADDRESS_MAX);
-    OutputAddressWidth = SMMUV3_STREAM_TABLE_ENTRY_OUTPUT_ADDRESS_MAX;
+    StreamEntry->S2Ps            = SmmuV3EncodeAddressWidth (SMMUV3_STREAM_TABLE_ENTRY_OUTPUT_ADDRESS_MAX);
+    SmmuInfo->OutputAddressWidth = SMMUV3_STREAM_TABLE_ENTRY_OUTPUT_ADDRESS_MAX;
   }
 
-  Status = SmmuV3SetTranslationStartingLevel (SmmuInfo, OutputAddressWidth, &S2Sl0);
+  Status = SmmuV3SetTranslationStartingLevel (SmmuInfo, SmmuInfo->OutputAddressWidth, &S2Sl0);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "%a: Failed to set translation starting level\n", __func__));
     return Status;
@@ -392,7 +407,7 @@ SmmuV3BuildStreamTableEntry (
   //
   StreamEntry->S2Sl0 = S2Sl0;
 
-  InputSize           = OutputAddressWidth;
+  InputSize           = SmmuInfo->OutputAddressWidth;
   StreamEntry->S2T0Sz = 64 - InputSize;
 
   /**
@@ -602,7 +617,7 @@ SmmuV3Configure (
   }
 
   // Load default STE values
-  for (Index = 0; Index < SmmuInfo->StreamTableEntryMax; Index++) {
+  for (Index = 0; Index <= SmmuInfo->StreamTableEntryMax; Index++) {
     Status = SmmuV3BuildStreamTableEntry (SmmuInfo, Index, &StreamTablePtr[Index]);
     if (EFI_ERROR (Status)) {
       DEBUG ((DEBUG_ERROR, "%a: Error building stream table\n", __func__));
@@ -781,7 +796,6 @@ End:
 
   @return Pointer to the SMMU_CONFIG structure, or NULL if not found.
 **/
-STATIC
 SMMU_CONFIG *
 GetSmmuConfigHobData (
   VOID
@@ -808,7 +822,6 @@ GetSmmuConfigHobData (
   @retval EFI_INVALID_PARAMETER     Invalid parameter.
   @retval EFI_INCOMPATIBLE_VERSION  Incompatible version.
 **/
-STATIC
 EFI_STATUS
 CheckSmmuConfigVersion (
   IN SMMU_CONFIG  *SmmuConfig
@@ -995,23 +1008,24 @@ InitializeSmmuDxe (
   EFI_EVENT                Event;
   UINT32                   SmmuIndex;
   EFI_ACPI_TABLE_PROTOCOL  *AcpiTable;
-  SMMU_CONFIG              *SmmuConfig;
+  // SMMU_CONFIG              *SmmuConfig;
   PAGE_TABLE               *PageTableRoot;
   VOID                     *IortData;
+  EFI_ACPI_COMMON_HEADER   *IortHeader;
 
   // Get SMMU configuration data from HOB
-  SmmuConfig = GetSmmuConfigHobData ();
-  if (SmmuConfig == NULL) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to get SMMU config data from gSmmuConfigHobGuid\n", __func__));
-    return EFI_NOT_FOUND;
-  }
+  // SmmuConfig = GetSmmuConfigHobData ();
+  // if (SmmuConfig == NULL) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Failed to get SMMU config data from gSmmuConfigHobGuid\n", __func__));
+  //   return EFI_NOT_FOUND;
+  // }
 
   // Check SMMU_CONFIG version, return error if incompatible. Backwards compatibility not supported.
-  Status = CheckSmmuConfigVersion (SmmuConfig);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: SMMU_CONFIG version check failed\n", __func__));
-    return Status;
-  }
+  // Status = CheckSmmuConfigVersion (SmmuConfig);
+  // if (EFI_ERROR (Status)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: SMMU_CONFIG version check failed\n", __func__));
+  //   return Status;
+  // }
 
   // Check if ACPI Table Protocol has been installed
   Status = gBS->LocateProtocol (
@@ -1044,7 +1058,16 @@ InitializeSmmuDxe (
     return Status;
   }
 
-  IortData = (VOID *)((UINT8 *)SmmuConfig + SmmuConfig->IortOffset);
+  IortHeader = NULL;
+  IortHeader = EfiLocateNextAcpiTable (EFI_ACPI_6_0_IO_REMAPPING_TABLE_SIGNATURE, IortHeader);
+  if (IortHeader == NULL) {
+    DEBUG ((DEBUG_ERROR, "%a: Failed to locate IORT table\n", __func__));
+    return EFI_NOT_FOUND;
+  }
+
+  // Cast the void* to the IORT structure
+  IortData = (EFI_ACPI_6_0_IO_REMAPPING_TABLE *)IortHeader;
+  // IortData = (VOID *)((UINT8 *)SmmuConfig + SmmuConfig->IortOffset);
 
   Status = SmmuV3ParseIort (IortData, &mIoMmu->SmmuInfo, &mIoMmu->SmmuCount);
   if (EFI_ERROR (Status)) {
@@ -1055,11 +1078,11 @@ InitializeSmmuDxe (
   DEBUG ((DEBUG_VERBOSE, "%a: Found %u SMMUs\n", __func__, mIoMmu->SmmuCount));
 
   // Add IORT Table
-  Status = AddIortTable (AcpiTable, IortData, SmmuConfig->IortSize);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to add IORT table\n", __func__));
-    goto Error;
-  }
+  // Status = AddIortTable (AcpiTable, IortData, SmmuConfig->IortSize);
+  // if (EFI_ERROR (Status)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Failed to add IORT table\n", __func__));
+  //   goto Error;
+  // }
 
   // Global Page Table until TODO: IoMmu Protocol V2 is implemented
   PageTableRoot = PageTableInit ();

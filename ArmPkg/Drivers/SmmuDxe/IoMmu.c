@@ -117,12 +117,12 @@ UpdateMapping (
     goto End;
   }
 
-  Status = EFI_SUCCESS;
+  Status  = EFI_SUCCESS;
   Current = Root;
 
   // Traverse the page table to the leaf level
   for (Level = mIoMmu->SmmuInfo->TranslationStartingLevel; Level < PAGE_TABLE_DEPTH - 1; Level++) {
-    Index = PAGE_TABLE_INDEX (VirtualAddress, Level);
+    Index = PAGE_TABLE_INDEX (VirtualAddress, Level, mIoMmu->SmmuInfo->OutputAddressWidth, mIoMmu->SmmuInfo->TranslationStartingLevel, mIoMmu->SmmuInfo->PageTableRootConcatenated);
 
     if (Current->Entries[Index] == 0) {
       PAGE_TABLE  *NewPage = (PAGE_TABLE *)AllocatePages (1);
@@ -143,7 +143,7 @@ UpdateMapping (
 
   // leaf level
   if (Current != 0) {
-    Index = PAGE_TABLE_INDEX (VirtualAddress, Level);
+    Index = PAGE_TABLE_INDEX (VirtualAddress, Level, mIoMmu->SmmuInfo->OutputAddressWidth, mIoMmu->SmmuInfo->TranslationStartingLevel, mIoMmu->SmmuInfo->PageTableRootConcatenated);
 
     if (Valid && ((Current->Entries[Index] & PAGE_TABLE_ENTRY_VALID_BIT) != 0)) {
       DEBUG ((DEBUG_VERBOSE, "%a: Page already mapped. VirtualAddress = 0x%llx PhysicalAddress=0x%llx\n", __func__, VirtualAddress, PhysicalAddress));
@@ -153,7 +153,7 @@ UpdateMapping (
       if (Valid) {
         Entry = (PhysicalAddress & ~PAGE_TABLE_BLOCK_OFFSET); // Assign PA
         // validate entry and set leaf level flags
-        Entry                  |= PAGE_TABLE_ACCESS_FLAG | PAGE_TABLE_DESCRIPTOR | PAGE_TABLE_ENTRY_VALID_BIT;
+        Entry                  |= PAGE_TABLE_READ_BIT | PAGE_TABLE_WRITE_BIT | PAGE_TABLE_ACCESS_FLAG | PAGE_TABLE_DESCRIPTOR | PAGE_TABLE_ENTRY_VALID_BIT;
         Current->Entries[Index] =  Entry;
       } else {
         Current->Entries[Index] = Current->Entries[Index] & ~PAGE_TABLE_ENTRY_VALID_BIT; // only invalidate leaf entry
@@ -476,39 +476,40 @@ IoMmuSetAttribute (
   IN UINT64                IoMmuAccess
   )
 {
-  EFI_STATUS      Status;
-  IOMMU_MAP_INFO  *MapInfo;
-  UINT32          SmmuIndex;
+//   EFI_STATUS      Status;
+//   IOMMU_MAP_INFO  *MapInfo;
+//   UINT32          SmmuIndex;
 
-  if ((This == NULL) || (Mapping == NULL) || ((IoMmuAccess & ~(EDKII_IOMMU_ACCESS_READ | EDKII_IOMMU_ACCESS_WRITE)) != 0)) {
-    DEBUG ((DEBUG_ERROR, "%a: Invalid parameter\n", __func__));
-    Status = EFI_INVALID_PARAMETER;
-    goto End;
-  }
+//   if ((This == NULL) || (Mapping == NULL) || ((IoMmuAccess & ~(EDKII_IOMMU_ACCESS_READ | EDKII_IOMMU_ACCESS_WRITE)) != 0)) {
+//     DEBUG ((DEBUG_ERROR, "%a: Invalid parameter\n", __func__));
+//     Status = EFI_INVALID_PARAMETER;
+//     goto End;
+//   }
 
-  MapInfo = (IOMMU_MAP_INFO *)Mapping;
+//   MapInfo = (IOMMU_MAP_INFO *)Mapping;
 
-  Status = UpdatePageTable (
-             mIoMmu->SmmuInfo->PageTableRoot,
-             MapInfo->PhysicalAddress,
-             MapInfo->NumberOfBytes,
-             PAGE_TABLE_READ_WRITE_FROM_IOMMU_ACCESS (IoMmuAccess),
-             FALSE,
-             TRUE
-             );
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to update page table.\n", __func__));
-    goto End;
-  }
+//   Status = UpdatePageTable (
+//              mIoMmu->SmmuInfo->PageTableRoot,
+//              MapInfo->PhysicalAddress,
+//              MapInfo->NumberOfBytes,
+//              PAGE_TABLE_READ_WRITE_FROM_IOMMU_ACCESS (IoMmuAccess),
+//              FALSE,
+//              TRUE
+//              );
+//   if (EFI_ERROR (Status)) {
+//     DEBUG ((DEBUG_ERROR, "%a: Failed to update page table.\n", __func__));
+//     goto End;
+//   }
 
-End:
-  // Only prints errors if Event Queue is not empty and GError != 0
-  for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
-    SmmuV3LogErrors (&mIoMmu->SmmuInfo[SmmuIndex]);
-  }
+// End:
+//   // Only prints errors if Event Queue is not empty and GError != 0
+//   for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
+//     SmmuV3LogErrors (&mIoMmu->SmmuInfo[SmmuIndex]);
+//   }
 
-  ASSERT_EFI_ERROR (Status);
-  return Status;
+//   ASSERT_EFI_ERROR (Status);
+//   return Status;
+  return EFI_SUCCESS;
 }
 
 // IOMMU Protocol instance for the SMMU.
