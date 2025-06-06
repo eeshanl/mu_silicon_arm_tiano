@@ -30,12 +30,19 @@
 
 #pragma pack(push, 1)
 
+typedef struct _SMMU_STATUS {
+  UINT64   SmmuBase;          // Base address of the SMMU registers
+  BOOLEAN  Enabled;           // TRUE if SMMU is enabled, FALSE otherwise
+} SMMU_STATUS;
+
 // SMMU_CONFIG structure to pass the SMMU configuration data from the platform to the SMMU driver.
 typedef struct _SMMU_CONFIG {
-  UINT32    VersionMajor;
-  UINT32    VersionMinor;
-  UINT32    IortSize;
-  UINT32    IortOffset;
+  UINT32       VersionMajor;
+  UINT32       VersionMinor;
+  UINT32       SmmuCount;
+  SMMU_STATUS  *SmmuStatus;
+  UINT32       IortSize;
+  UINT32       IortOffset;
 } SMMU_CONFIG;
 
 #pragma pack(pop)

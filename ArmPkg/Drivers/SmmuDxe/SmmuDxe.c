@@ -1035,6 +1035,7 @@ InitializeSmmuDxe (
   EFI_STATUS               Status;
   EFI_EVENT                Event;
   UINT32                   SmmuIndex;
+  UINT32                   SmmuStatusIndex;
   EFI_ACPI_TABLE_PROTOCOL  *AcpiTable;
   SMMU_CONFIG              *SmmuConfig;
   PAGE_TABLE               *PageTableRoot;
@@ -1110,12 +1111,40 @@ InitializeSmmuDxe (
     goto Error;
   }
 
+  // Set SMMUs' Enabled status based on the SMMU_STATUS in the SMMU_CONFIG HOB structure.
+  for (SmmuStatusIndex = 0; i < SmmuConfig->SmmuCount; SmmuStatusIndex++) {
+    for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
+      if (mIoMmu->SmmuInfo[SmmuIndex].SmmuBase == SmmuConfig->SmmuStatus[SmmuStatusIndex].SmmuBase) {
+        mIoMmu->SmmuInfo[SmmuIndex].Enabled = SmmuConfig->SmmuStatus[SmmuStatusIndex].Enabled;
+      }
+    }
+  }
+
   // Configure SMMUv3 hardware
   for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
     Status = SmmuV3Configure (&mIoMmu->SmmuInfo[SmmuIndex], PageTableRoot);
     if (EFI_ERROR (Status)) {
       DEBUG ((DEBUG_ERROR, "%a: Failed to configure SMMUv3 hardware\n", __func__));
       goto Error;
+    }
+  }
+
+  // Disable any SMMU that is not enabled in the SMMU_CONFIG HOB structure.
+  // Disables translation and sets global bypass.
+  for (SmmuStatusIndex = 0; i < SmmuConfig->SmmuCount; SmmuStatusIndex++) {
+    if (SmmuConfig->SmmuStatus[SmmuStatusIndex].Enabled == FALSE) {
+      Status = SmmuV3DisableTranslation (SmmuConfig->SmmuStatus[SmmuStatusIndex].SmmuBase);
+      if (EFI_ERROR (Status)) {
+        DEBUG ((DEBUG_ERROR, "%a: Failed to disable smmu translation.\n", __func__));
+        ASSERT_EFI_ERROR (Status);
+      }
+  
+      Status = SmmuV3SetGlobalBypass (SmmuConfig->SmmuStatus[SmmuStatusIndex].SmmuBase);
+      if (EFI_ERROR (Status)) {
+        DEBUG ((DEBUG_ERROR, "%a: Failed to set global bypass.\n", __func__));
+        ASSERT_EFI_ERROR (Status);
+      }
+      DEBUG ((DEBUG_INFO, "%a: SMMUv3 0x%llx is disabled\n", __func__, SmmuConfig->SmmuStatus[SmmuStatusIndex].SmmuBase));
     }
   }
 
