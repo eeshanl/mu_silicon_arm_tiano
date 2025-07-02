@@ -933,7 +933,7 @@ EFI_STATUS
 SmmuV3GetNodeInfo (
   IN  VOID       *IortTable,
   OUT SMMU_INFO  *SmmuInfoArray,
-  OUT VOID       **SmmuNodePtrs
+  OUT UINTN       *SmmuNodePtrs
   )
 {
   EFI_ACPI_6_0_IO_REMAPPING_TABLE       *Iort;
@@ -958,7 +958,7 @@ SmmuV3GetNodeInfo (
       SmmuInfoArray[SmmuIndex].Flags               = SmmuNode->Flags;
       SmmuInfoArray[SmmuIndex].StreamTableEntryMax = 0;  // Initialize max stream ID to 0
       SmmuInfoArray[SmmuIndex].StreamEntryConfig   = NULL;
-      SmmuNodePtrs[SmmuIndex]                      = (VOID *)SmmuNode;
+      SmmuNodePtrs[SmmuIndex]                      = (UINTN)SmmuNode;
       SmmuIndex++;
     }
 
@@ -1037,7 +1037,7 @@ SmmuV3NodeCount (
 EFI_STATUS
 SmmuV3GetMaxStreamIds (
   IN  VOID       *IortTable,
-  IN  VOID       **SmmuNodePtrs,
+  IN  UINTN      *SmmuNodePtrs,
   IN  UINT32     SmmuNodeCount,
   OUT SMMU_INFO  *SmmuInfoArray
   )
@@ -1074,7 +1074,7 @@ SmmuV3GetMaxStreamIds (
         // Check if the output reference points to an SMMU node
         Found = FALSE;
         for (SmmuIndex = 0; SmmuIndex < SmmuNodeCount; SmmuIndex++) {
-          if (OutputNode == SmmuNodePtrs[SmmuIndex]) {
+          if (OutputNode == (VOID *)SmmuNodePtrs[SmmuIndex]) {
             // This ID mapping references an SMMU node
             // Calculate the max Stream ID for this mapping: OutputBase + NumIds
             CurMaxMappingStreamId = IdMapping[IdMappingIndex].OutputBase + IdMapping[IdMappingIndex].NumIds;
@@ -1133,7 +1133,7 @@ SmmuV3GetMaxStreamIds (
 EFI_STATUS
 SmmuV3GetStreamIdInfo (
   IN  VOID       *IortTable,
-  IN  VOID       **SmmuNodePtrs,
+  IN  UINTN      *SmmuNodePtrs,
   IN  UINT32     SmmuNodeCount,
   OUT SMMU_INFO  *SmmuInfoArray
   )
@@ -1189,7 +1189,7 @@ SmmuV3GetStreamIdInfo (
           // Check if the output reference points to an SMMU node
           Found = FALSE;
           for (SmmuIndex = 0; SmmuIndex < SmmuNodeCount; SmmuIndex++) {
-            if (OutputNode == SmmuNodePtrs[SmmuIndex]) {
+            if (OutputNode == (VOID *)SmmuNodePtrs[SmmuIndex]) {
               // This ID mapping references an SMMU node
               // Calculate the Stream ID range
               StartId = IdMapping[IdMappingIndex].OutputBase;
@@ -1259,130 +1259,148 @@ SmmuV3ParseIort (
   OUT UINT32     *SmmuCount
   )
 {
-  EFI_STATUS                       Status;
-  EFI_ACPI_6_0_IO_REMAPPING_TABLE  *Iort;
+  EFI_STATUS                       Status = EFI_SUCCESS;
+  // EFI_ACPI_6_0_IO_REMAPPING_TABLE  *Iort;
   SMMU_INFO                        *SmmuInfoArray;
-  VOID                             **SmmuNodePtrs;
+  UINTN                            *SmmuNodePtrs;
   UINT32                           SmmuNodeCount;
   UINT32                           SmmuIndex;
 
-  if ((IortTable == NULL) || (SmmuInfo == NULL) || (SmmuCount == NULL)) {
-    DEBUG ((DEBUG_ERROR, "%a: Invalid parameters\n", __func__));
-    return EFI_INVALID_PARAMETER;
-  }
+  // if ((IortTable == NULL) || (SmmuInfo == NULL) || (SmmuCount == NULL)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Invalid parameters\n", __func__));
+  //   return EFI_INVALID_PARAMETER;
+  // }
 
-  SmmuInfoArray = NULL;
-  SmmuNodePtrs  = NULL;
+  // SmmuInfoArray = NULL;
+  // SmmuNodePtrs  = NULL;
 
-  // Cast the void* to the IORT structure
-  Iort = (EFI_ACPI_6_0_IO_REMAPPING_TABLE *)IortTable;
+  // // Cast the void* to the IORT structure
+  // Iort = (EFI_ACPI_6_0_IO_REMAPPING_TABLE *)IortTable;
+  // DEBUG ((DEBUG_INFO, "%a: HERE1\n", __func__));
 
-  // Verify IORT signature
-  if (Iort->Header.Signature != EFI_ACPI_6_0_IO_REMAPPING_TABLE_SIGNATURE) {
-    DEBUG ((
-      DEBUG_ERROR,
-      "%a: Invalid IORT signature: 0x%08X, expected: 0x%08X\n",
-      __func__,
-      Iort->Header.Signature,
-      EFI_ACPI_6_0_IO_REMAPPING_TABLE_SIGNATURE
-      ));
-    return EFI_UNSUPPORTED;
-  }
+  // // Verify IORT signature
+  // if (Iort->Header.Signature != EFI_ACPI_6_0_IO_REMAPPING_TABLE_SIGNATURE) {
+  //   DEBUG ((
+  //     DEBUG_ERROR,
+  //     "%a: Invalid IORT signature: 0x%08X, expected: 0x%08X\n",
+  //     __func__,
+  //     Iort->Header.Signature,
+  //     EFI_ACPI_6_0_IO_REMAPPING_TABLE_SIGNATURE
+  //     ));
+  //   return EFI_UNSUPPORTED;
+  // }
+  // DEBUG ((DEBUG_INFO, "%a: HERE2\n", __func__));
 
-  if ((Iort->Header.Revision != EFI_ACPI_IO_REMAPPING_TABLE_REVISION_00) && (Iort->Header.Revision != EFI_ACPI_IO_REMAPPING_TABLE_REVISION_06)) {
-    DEBUG ((
-      DEBUG_ERROR,
-      "%a: Unsupported IORT revision: %d, expected: [%d, %d]\n",
-      __func__,
-      Iort->Header.Revision,
-      EFI_ACPI_IO_REMAPPING_TABLE_REVISION_00,
-      EFI_ACPI_IO_REMAPPING_TABLE_REVISION_06
-      ));
-    return EFI_UNSUPPORTED;
-  }
+  // if ((Iort->Header.Revision != EFI_ACPI_IO_REMAPPING_TABLE_REVISION_00) && (Iort->Header.Revision != EFI_ACPI_IO_REMAPPING_TABLE_REVISION_06)) {
+  //   DEBUG ((
+  //     DEBUG_ERROR,
+  //     "%a: Unsupported IORT revision: %d, expected: [%d, %d]\n",
+  //     __func__,
+  //     Iort->Header.Revision,
+  //     EFI_ACPI_IO_REMAPPING_TABLE_REVISION_00,
+  //     EFI_ACPI_IO_REMAPPING_TABLE_REVISION_06
+  //     ));
+  //   return EFI_UNSUPPORTED;
+  // }
+  // DEBUG ((DEBUG_INFO, "%a: HERE3\n", __func__));
 
-  // First pass: get the number of SMMU nodes
-  Status = SmmuV3NodeCount (IortTable, &SmmuNodeCount);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to get IORT node count\n", __func__));
-    return Status;
-  }
-
+  // // First pass: get the number of SMMU nodes
+  // Status = SmmuV3NodeCount (IortTable, &SmmuNodeCount);
+  // if (EFI_ERROR (Status)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Failed to get IORT node count\n", __func__));
+  //   return Status;
+  // }
+  // DEBUG ((DEBUG_INFO, "%a: HERE4\n", __func__));
+  SmmuNodeCount = 5;
   if (SmmuNodeCount == 0) {
     *SmmuCount = 0;
     *SmmuInfo  = NULL;
     return EFI_NOT_FOUND;
   }
+  DEBUG ((DEBUG_INFO, "%a: HERE5\n", __func__));
 
   // Allocate memory for SMMU info array
-  SmmuInfoArray = AllocateZeroPool (SmmuNodeCount * sizeof (SMMU_INFO));
+  SmmuInfoArray = (SMMU_INFO *) AllocatePages (EFI_SIZE_TO_PAGES(SmmuNodeCount * sizeof (SMMU_INFO)));
   if (SmmuInfoArray == NULL) {
     DEBUG ((DEBUG_ERROR, "%a: Failed to allocate memory for SMMU info array\n", __func__));
     Status = EFI_OUT_OF_RESOURCES;
     goto Error;
   }
+  ZeroMem (SmmuInfoArray, SmmuNodeCount * sizeof (SMMU_INFO));
+  DEBUG ((DEBUG_INFO, "%a: HERE6\n", __func__));
 
   // Allocate memory for SMMU node pointers (for output reference lookup)
-  SmmuNodePtrs = AllocateZeroPool (SmmuNodeCount * sizeof (VOID *));
+  SmmuNodePtrs = (UINTN *)AllocatePages (EFI_SIZE_TO_PAGES(SmmuNodeCount * sizeof (UINTN *)));
   if (SmmuNodePtrs == NULL) {
     DEBUG ((DEBUG_ERROR, "%a: Failed to allocate memory for SMMU node pointers\n", __func__));
     Status = EFI_OUT_OF_RESOURCES;
     goto Error;
   }
+  ZeroMem (SmmuNodePtrs, SmmuNodeCount * sizeof (UINTN *));
+  DEBUG ((DEBUG_INFO, "%a: HERE7\n", __func__));
 
-  // Second pass: collect SMMU information
-  Status = SmmuV3GetNodeInfo (IortTable, SmmuInfoArray, SmmuNodePtrs);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to get SMMU node info\n", __func__));
-    goto Error;
-  }
+  // // Second pass: collect SMMU information
+  // Status = SmmuV3GetNodeInfo (IortTable, SmmuInfoArray, SmmuNodePtrs);
+  // if (EFI_ERROR (Status)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Failed to get SMMU node info\n", __func__));
+  //   goto Error;
+  // }
+  // DEBUG ((DEBUG_INFO, "%a: HERE8\n", __func__));
 
-  // Third pass: calculate max Stream ID for each SMMU node
-  Status = SmmuV3GetMaxStreamIds (IortTable, SmmuNodePtrs, SmmuNodeCount, SmmuInfoArray);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to get max Stream ID for SMMU nodes\n", __func__));
-    goto Error;
-  }
+  // // Third pass: calculate max Stream ID for each SMMU node
+  // Status = SmmuV3GetMaxStreamIds (IortTable, SmmuNodePtrs, SmmuNodeCount, SmmuInfoArray);
+  // if (EFI_ERROR (Status)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Failed to get max Stream ID for SMMU nodes\n", __func__));
+  //   goto Error;
+  // }
+  // DEBUG ((DEBUG_INFO, "%a: HERE9\n", __func__));
 
   // Allocate memory for Stream ID ranges after knowing the maximum Stream ID
   for (SmmuIndex = 0; SmmuIndex < SmmuNodeCount; SmmuIndex++) {
-    if (SmmuInfoArray[SmmuIndex].StreamTableEntryMax > 0) {
+    // if (SmmuInfoArray[SmmuIndex].StreamTableEntryMax > 0) {
       // Allocate space for StreamIdRanges based on MaxStreamId
       // One entry for each possible StreamId (0 to MaxStreamId inclusive)
-      SmmuInfoArray[SmmuIndex].StreamEntryConfig = AllocateZeroPool ((SmmuInfoArray[SmmuIndex].StreamTableEntryMax + 1) * sizeof (SMMU_STREAM_ENTRY_CONFIG));
+      SmmuInfoArray[SmmuIndex].StreamEntryConfig = (SMMU_STREAM_ENTRY_CONFIG *) AllocatePages (EFI_SIZE_TO_PAGES((0xFFFF + 1) * sizeof (SMMU_STREAM_ENTRY_CONFIG)));
       if (SmmuInfoArray[SmmuIndex].StreamEntryConfig == NULL) {
         DEBUG ((DEBUG_ERROR, "%a: Failed to allocate Stream ID ranges for SMMU[%d]\n", __func__, SmmuInfoArray[SmmuIndex].SmmuBase));
         Status = EFI_OUT_OF_RESOURCES;
         goto Error;
       }
-    }
+      ZeroMem (SmmuInfoArray[SmmuIndex].StreamEntryConfig, (0xFFFF + 1) * sizeof (SMMU_STREAM_ENTRY_CONFIG));
+    // }
   }
+  DEBUG ((DEBUG_INFO, "%a: HERE10\n", __func__));
 
-  // Fourth pass: collect per Stream ID range info like CCA, CPM, DACS for each RC/NamedComp node
-  Status = SmmuV3GetStreamIdInfo (IortTable, SmmuNodePtrs, SmmuNodeCount, SmmuInfoArray);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to get Stream ID info for SMMU nodes\n", __func__));
-    goto Error;
-  }
+  // // Fourth pass: collect per Stream ID range info like CCA, CPM, DACS for each RC/NamedComp node
+  // Status = SmmuV3GetStreamIdInfo (IortTable, SmmuNodePtrs, SmmuNodeCount, SmmuInfoArray);
+  // if (EFI_ERROR (Status)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Failed to get Stream ID info for SMMU nodes\n", __func__));
+  //   goto Error;
+  // }
+  DEBUG ((DEBUG_INFO, "%a: HERE11\n", __func__));
 
-  FreePool (SmmuNodePtrs);
+  FreePages ((VOID *)SmmuNodePtrs, EFI_SIZE_TO_PAGES(SmmuNodeCount * sizeof (UINTN *)));
+    DEBUG ((DEBUG_INFO, "%a: HERE12\n", __func__));
+
   *SmmuInfo  = SmmuInfoArray;
   *SmmuCount = SmmuNodeCount;
+    DEBUG ((DEBUG_INFO, "%a: HERE13\n", __func__));
+
   return Status;
 
 Error:
   if (SmmuInfoArray != NULL) {
     for (SmmuIndex = 0; SmmuIndex < SmmuNodeCount; SmmuIndex++) {
       if (SmmuInfoArray[SmmuIndex].StreamEntryConfig != NULL) {
-        FreePool (SmmuInfoArray[SmmuIndex].StreamEntryConfig);
+        FreePages (SmmuInfoArray[SmmuIndex].StreamEntryConfig, EFI_SIZE_TO_PAGES((0xFFFF + 1) * sizeof (SMMU_STREAM_ENTRY_CONFIG)));
       }
     }
 
-    FreePool (SmmuInfoArray);
+    FreePages (SmmuInfoArray, EFI_SIZE_TO_PAGES(SmmuNodeCount * sizeof (SMMU_INFO)));
   }
 
   if (SmmuNodePtrs != NULL) {
-    FreePool (SmmuNodePtrs);
+    FreePages (SmmuNodePtrs, EFI_SIZE_TO_PAGES(SmmuNodeCount * sizeof (VOID *)));
   }
 
   return Status;

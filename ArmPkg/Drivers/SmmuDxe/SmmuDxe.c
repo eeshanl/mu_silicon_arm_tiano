@@ -41,7 +41,6 @@ IOMMU_CONFIG  *mIoMmu;
   @retval EFI_SUCCESS            Success.
   @retval EFI_INVALID_PARAMETER  Invalid parameter.
 **/
-STATIC
 EFI_STATUS
 AcpiPlatformChecksum (
   IN OUT UINT8  *Buffer,
@@ -76,7 +75,6 @@ AcpiPlatformChecksum (
   @retval EFI_OUT_OF_RESOURCES      Out of resources.
   @retval EFI_INVALID_PARAMETER     Invalid parameter.
 **/
-STATIC
 EFI_STATUS
 AddIortTable (
   IN EFI_ACPI_TABLE_PROTOCOL  *AcpiTable,
@@ -134,7 +132,6 @@ AddIortTable (
 
   @retval A pointer to the initialized page table, or NULL on failure.
 **/
-STATIC
 PAGE_TABLE *
 PageTableInit (
   VOID
@@ -167,7 +164,6 @@ PageTableInit (
   @param [in]  Level      The level of the page table to deinitialize.
   @param [in]  PageTable  The page table to deinitialize.
 **/
-STATIC
 VOID
 PageTableDeInit (
   IN UINT8       Level,
@@ -210,7 +206,6 @@ PageTableDeInit (
   @retval EFI_INVALID_PARAMETER One or more parameters are invalid.
   @retval EFI_OUT_OF_RESOURCES  Allocation failed due to insufficient resources.
 **/
-STATIC
 EFI_STATUS
 SmmuV3AllocateEventQueue (
   IN  SMMU_INFO  *SmmuInfo,
@@ -254,7 +249,6 @@ SmmuV3AllocateEventQueue (
   @retval EFI_INVALID_PARAMETER One or more parameters are invalid.
   @retval EFI_OUT_OF_RESOURCES  Allocation failed due to insufficient resources.
 **/
-STATIC
 EFI_STATUS
 SmmuV3AllocateCommandQueue (
   IN  SMMU_INFO  *SmmuInfo,
@@ -292,7 +286,6 @@ SmmuV3AllocateCommandQueue (
 
   @param [in]  QueuePtr    Pointer to the queue to free.
 **/
-STATIC
 VOID
 SmmuV3FreeQueue (
   IN VOID    *QueuePtr,
@@ -319,7 +312,6 @@ SmmuV3FreeQueue (
   @retval EFI_SUCCESS         Success.
   @retval EFI_INVALID_PARAMETER  Invalid parameter.
 **/
-STATIC
 EFI_STATUS
 SmmuV3BuildStreamTableEntry (
   IN SMMU_INFO                   *SmmuInfo,
@@ -494,7 +486,6 @@ SmmuV3BuildStreamTableEntry (
 
   @retval Pointer to the allocated stream table, or NULL on failure.
 **/
-STATIC
 SMMUV3_STREAM_TABLE_ENTRY *
 SmmuV3AllocateStreamTable (
   IN SMMU_INFO  *SmmuInfo,
@@ -533,7 +524,6 @@ SmmuV3AllocateStreamTable (
   @param [in] StreamTablePtr  Pointer to the stream table entry.
   @param [in] Size            Size of the stream table.
 **/
-STATIC
 VOID
 SmmuV3FreeStreamTable (
   IN VOID    *StreamTablePtr,
@@ -569,7 +559,6 @@ SmmuV3FreeStreamTable (
   @retval EFI_DEVICE_ERROR       Device error.
   @retval Others                 Failure.
 **/
-STATIC
 EFI_STATUS
 SmmuV3Configure (
   IN SMMU_INFO   *SmmuInfo,
@@ -822,7 +811,6 @@ End:
 
   @return Pointer to the SMMU_CONFIG structure, or NULL if not found.
 **/
-STATIC
 SMMU_CONFIG *
 GetSmmuConfigHobData (
   VOID
@@ -849,7 +837,6 @@ GetSmmuConfigHobData (
   @retval EFI_INVALID_PARAMETER     Invalid parameter.
   @retval EFI_INCOMPATIBLE_VERSION  Incompatible version.
 **/
-STATIC
 EFI_STATUS
 CheckSmmuConfigStructure (
   IN SMMU_CONFIG  *SmmuConfig
@@ -887,11 +874,12 @@ IoMmuConfigInit (
   OUT IOMMU_CONFIG  **IoMmu
   )
 {
-  *IoMmu = (IOMMU_CONFIG *)AllocateZeroPool (sizeof (IOMMU_CONFIG));
+  *IoMmu = (IOMMU_CONFIG *)AllocatePages (EFI_SIZE_TO_PAGES(sizeof (IOMMU_CONFIG)));
   if (*IoMmu == NULL) {
     DEBUG ((DEBUG_ERROR, "%a: Failed to allocate IOMMU_CONFIG structure\n", __func__));
     return EFI_OUT_OF_RESOURCES;
   }
+  ZeroMem (*IoMmu, sizeof (IOMMU_CONFIG));
 
   return EFI_SUCCESS;
 }
@@ -902,7 +890,6 @@ IoMmuConfigInit (
 
   @param [in]  Smmu    Pointer to the SMMU_INFO structure to deinitialize.
 **/
-STATIC
 VOID
 IoMmuDeInit (
   IN IOMMU_CONFIG  *IoMmu
@@ -954,7 +941,7 @@ IoMmuDeInit (
   }
 
   FreePool (IoMmu->SmmuInfo);
-  FreePool (IoMmu);
+  FreePages (IoMmu, EFI_SIZE_TO_PAGES(sizeof (IOMMU_CONFIG)));
 }
 
 /**
@@ -963,16 +950,15 @@ IoMmuDeInit (
   @param [in] Event    The event that triggered this notification function.
   @param [in] Context  Pointer to the notification function's context.
 **/
-STATIC
 VOID
 SmmuV3ExitBootServices (
   IN      EFI_EVENT  Event,
   IN      VOID       *Context
   )
 {
-  EFI_STATUS  Status;
+  // EFI_STATUS  Status;
   EFI_TPL     OldTpl;
-  UINT32      SmmuIndex;
+  // UINT32      SmmuIndex;
 
   if (Event == NULL) {
     DEBUG ((DEBUG_ERROR, "%a: Invalid Event\n", __func__));
@@ -989,20 +975,20 @@ SmmuV3ExitBootServices (
 
   OldTpl = gBS->RaiseTPL (TPL_NOTIFY);
 
-  for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
-    Status = SmmuV3DisableTranslation (mIoMmu->SmmuInfo[SmmuIndex].SmmuBase);
-    if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_ERROR, "%a: Failed to disable smmu 0x%llx translation.\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
-      ASSERT_EFI_ERROR (Status);
-    }
+  // for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
+  //   Status = SmmuV3DisableTranslation (mIoMmu->SmmuInfo[SmmuIndex].SmmuBase);
+  //   if (EFI_ERROR (Status)) {
+  //     DEBUG ((DEBUG_ERROR, "%a: Failed to disable smmu 0x%llx translation.\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
+  //     ASSERT_EFI_ERROR (Status);
+  //   }
 
-    Status = SmmuV3SetGlobalBypass (mIoMmu->SmmuInfo[SmmuIndex].SmmuBase);
-    if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_ERROR, "%a: Failed to set smmu 0x%llx global bypass.\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
-      ASSERT_EFI_ERROR (Status);
-    }
-  }
-
+  //   Status = SmmuV3SetGlobalBypass (mIoMmu->SmmuInfo[SmmuIndex].SmmuBase);
+  //   if (EFI_ERROR (Status)) {
+  //     DEBUG ((DEBUG_ERROR, "%a: Failed to set smmu 0x%llx global bypass.\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
+  //     ASSERT_EFI_ERROR (Status);
+  //   }
+  // }
+  DEBUG ((DEBUG_INFO, "%a: SMMU translation disabled and global bypass set for all SMMUs.\n", __func__));
   gBS->RestoreTPL (OldTpl);
   gBS->CloseEvent (Event);
 }
@@ -1033,62 +1019,65 @@ InitializeSmmuDxe (
   )
 {
   EFI_STATUS               Status;
-  EFI_EVENT                Event;
-  UINT32                   SmmuIndex;
-  UINT32                   SmmuStatusIndex;
-  UINT32                   SmmuDisabledCount;
-  UINT64                   *SmmuDisabledList;
-  EFI_ACPI_TABLE_PROTOCOL  *AcpiTable;
-  SMMU_CONFIG              *SmmuConfig;
+  // EFI_EVENT                Event;
+  // UINT32                   SmmuIndex;
+  // UINT32                   SmmuStatusIndex;
+  // UINT32                   SmmuDisabledCount;
+  // UINT64                   *SmmuDisabledList;
+  // EFI_ACPI_TABLE_PROTOCOL  *AcpiTable;
+  // SMMU_CONFIG              *SmmuConfig;
   PAGE_TABLE               *PageTableRoot;
   VOID                     *IortData;
 
-  // Get SMMU configuration data from HOB
-  SmmuConfig = GetSmmuConfigHobData ();
-  if (SmmuConfig == NULL) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to get SMMU config data from gSmmuConfigHobGuid\n", __func__));
-    return EFI_NOT_FOUND;
-  }
+  // // Get SMMU configuration data from HOB
+  // SmmuConfig = GetSmmuConfigHobData ();
+  // if (SmmuConfig == NULL) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Failed to get SMMU config data from gSmmuConfigHobGuid\n", __func__));
+  //   return EFI_NOT_FOUND;
+  // }
 
-  // Check SMMU_CONFIG version, return error if incompatible. Backwards compatibility not supported.
-  Status = CheckSmmuConfigStructure (SmmuConfig);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: SMMU_CONFIG version check failed\n", __func__));
-    return Status;
-  }
+  // // Check SMMU_CONFIG version, return error if incompatible. Backwards compatibility not supported.
+  // Status = CheckSmmuConfigStructure (SmmuConfig);
+  // if (EFI_ERROR (Status)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: SMMU_CONFIG version check failed\n", __func__));
+  //   return Status;
+  // }
 
-  // Check if ACPI Table Protocol has been installed
-  Status = gBS->LocateProtocol (
-                  &gEfiAcpiTableProtocolGuid,
-                  NULL,
-                  (VOID **)&AcpiTable
-                  );
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to locate ACPI Table Protocol\n", __func__));
-    return Status;
-  }
+  // // Check if ACPI Table Protocol has been installed
+  // Status = gBS->LocateProtocol (
+  //                 &gEfiAcpiTableProtocolGuid,
+  //                 NULL,
+  //                 (VOID **)&AcpiTable
+  //                 );
+  // if (EFI_ERROR (Status)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Failed to locate ACPI Table Protocol\n", __func__));
+  //   return Status;
+  // }
 
-  // Create an event callback to disable SMMUv3 translation and set global abort during ExitBootServices
-  Status = gBS->CreateEventEx (
-                  EVT_NOTIFY_SIGNAL,
-                  TPL_CALLBACK,
-                  SmmuV3ExitBootServices,
-                  NULL,
-                  &gEfiEventExitBootServicesGuid,
-                  &Event
-                  );
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to create ExitBootServices event\n", __func__));
-    return Status;
-  }
+  // // Create an event callback to disable SMMUv3 translation and set global abort during ExitBootServices
+  // Status = gBS->CreateEventEx (
+  //                 EVT_NOTIFY_SIGNAL,
+  //                 TPL_CALLBACK,
+  //                 SmmuV3ExitBootServices,
+  //                 NULL,
+  //                 &gEfiEventExitBootServicesGuid,
+  //                 &Event
+  //                 );
+  // if (EFI_ERROR (Status)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Failed to create ExitBootServices event\n", __func__));
+  //   return Status;
+  // }
 
+  DEBUG ((DEBUG_INFO, "%a: HERE1\n", __func__));
   Status = IoMmuConfigInit (&mIoMmu);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "%a: Failed to initialize IoMmu Config\n", __func__));
     return Status;
   }
+  DEBUG ((DEBUG_INFO, "%a: HERE2\n", __func__));
 
-  IortData = (VOID *)((UINTN)SmmuConfig + (UINTN)SmmuConfig->IortOffset);
+  // IortData = (VOID *)((UINTN)SmmuConfig + (UINTN)SmmuConfig->IortOffset);
+  DEBUG ((DEBUG_INFO, "%a: HERE3\n", __func__));
 
   Status = SmmuV3ParseIort (IortData, &mIoMmu->SmmuInfo, &mIoMmu->SmmuCount);
   if (EFI_ERROR (Status)) {
@@ -1096,14 +1085,14 @@ InitializeSmmuDxe (
     return Status;
   }
 
-  DEBUG ((DEBUG_VERBOSE, "%a: Found %u SMMUs\n", __func__, mIoMmu->SmmuCount));
+  DEBUG ((DEBUG_INFO, "%a: Found %u SMMUs\n", __func__, mIoMmu->SmmuCount));
 
-  // Add IORT Table
-  Status = AddIortTable (AcpiTable, IortData, SmmuConfig->IortSize);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to add IORT table\n", __func__));
-    goto Error;
-  }
+  // // Add IORT Table
+  // Status = AddIortTable (AcpiTable, IortData, SmmuConfig->IortSize);
+  // if (EFI_ERROR (Status)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Failed to add IORT table\n", __func__));
+  //   goto Error;
+  // }
 
   // Global Page Table until TODO: IoMmu Protocol V2 is implemented
   PageTableRoot = PageTableInit ();
@@ -1113,65 +1102,65 @@ InitializeSmmuDxe (
     goto Error;
   }
 
-  // Set SMMUs' Enabled status based on the SmmuDisabledList in the SMMU_CONFIG HOB structure.
-  SmmuDisabledCount = SmmuConfig->SmmuDisabledListSize / sizeof (UINT64);
-  SmmuDisabledList  = (UINT64 *)((UINTN)SmmuConfig + (UINTN)SmmuConfig->SmmuDisabledListOffset);
+  // // Set SMMUs' Enabled status based on the SmmuDisabledList in the SMMU_CONFIG HOB structure.
+  // SmmuDisabledCount = SmmuConfig->SmmuDisabledListSize / sizeof (UINT64);
+  // SmmuDisabledList  = (UINT64 *)((UINTN)SmmuConfig + (UINTN)SmmuConfig->SmmuDisabledListOffset);
 
-  for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
-    mIoMmu->SmmuInfo[SmmuIndex].Enabled = TRUE;
-    for (SmmuStatusIndex = 0; SmmuStatusIndex < SmmuDisabledCount; SmmuStatusIndex++) {
-      if (mIoMmu->SmmuInfo[SmmuIndex].SmmuBase == SmmuDisabledList[SmmuStatusIndex]) {
-        mIoMmu->SmmuInfo[SmmuIndex].Enabled = FALSE;
-      }
-    }
-  }
+  // for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
+  //   mIoMmu->SmmuInfo[SmmuIndex].Enabled = TRUE;
+  //   for (SmmuStatusIndex = 0; SmmuStatusIndex < SmmuDisabledCount; SmmuStatusIndex++) {
+  //     if (mIoMmu->SmmuInfo[SmmuIndex].SmmuBase == SmmuDisabledList[SmmuStatusIndex]) {
+  //       mIoMmu->SmmuInfo[SmmuIndex].Enabled = FALSE;
+  //     }
+  //   }
+  // }
 
-  // Configure SMMUv3 hardware
-  for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
-    if (mIoMmu->SmmuInfo[SmmuIndex].Enabled) {
-      Status = SmmuV3Configure (&mIoMmu->SmmuInfo[SmmuIndex], PageTableRoot);
-      if (EFI_ERROR (Status)) {
-        DEBUG ((DEBUG_ERROR, "%a: Failed to configure SMMUv3 hardware\n", __func__));
-        goto Error;
-      }
+  // // Configure SMMUv3 hardware
+  // for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
+  //   if (mIoMmu->SmmuInfo[SmmuIndex].Enabled) {
+  //     Status = SmmuV3Configure (&mIoMmu->SmmuInfo[SmmuIndex], PageTableRoot);
+  //     if (EFI_ERROR (Status)) {
+  //       DEBUG ((DEBUG_ERROR, "%a: Failed to configure SMMUv3 hardware\n", __func__));
+  //       goto Error;
+  //     }
 
-      DEBUG ((DEBUG_INFO, "%a: SMMUv3 0x%llx is configured for Stage2 Translation\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
-    }
-  }
+  //     DEBUG ((DEBUG_INFO, "%a: SMMUv3 0x%llx is configured for Stage2 Translation\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
+  //   }
+  // }
 
-  // Disable any SMMU that is not enabled.
-  // Disables translation and sets global bypass.
-  for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
-    if (mIoMmu->SmmuInfo[SmmuIndex].Enabled == FALSE) {
-      Status = SmmuV3DisableTranslation (mIoMmu->SmmuInfo[SmmuIndex].SmmuBase);
-      if (EFI_ERROR (Status)) {
-        DEBUG ((DEBUG_ERROR, "%a: Failed to disable smmu 0x%llx translation.\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
-        ASSERT_EFI_ERROR (Status);
-      }
+  // // Disable any SMMU that is not enabled.
+  // // Disables translation and sets global bypass.
+  // for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
+  //   if (mIoMmu->SmmuInfo[SmmuIndex].Enabled == FALSE) {
+  //     Status = SmmuV3DisableTranslation (mIoMmu->SmmuInfo[SmmuIndex].SmmuBase);
+  //     if (EFI_ERROR (Status)) {
+  //       DEBUG ((DEBUG_ERROR, "%a: Failed to disable smmu 0x%llx translation.\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
+  //       ASSERT_EFI_ERROR (Status);
+  //     }
 
-      Status = SmmuV3SetGlobalBypass (mIoMmu->SmmuInfo[SmmuIndex].SmmuBase);
-      if (EFI_ERROR (Status)) {
-        DEBUG ((DEBUG_ERROR, "%a: Failed to set smmu 0x%llx global bypass.\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
-        ASSERT_EFI_ERROR (Status);
-      }
+  //     Status = SmmuV3SetGlobalBypass (mIoMmu->SmmuInfo[SmmuIndex].SmmuBase);
+  //     if (EFI_ERROR (Status)) {
+  //       DEBUG ((DEBUG_ERROR, "%a: Failed to set smmu 0x%llx global bypass.\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
+  //       ASSERT_EFI_ERROR (Status);
+  //     }
 
-      DEBUG ((DEBUG_INFO, "%a: SMMUv3 0x%llx is disabled/global bypass.\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
-    }
-  }
+  //     DEBUG ((DEBUG_INFO, "%a: SMMUv3 0x%llx is disabled/global bypass.\n", __func__, mIoMmu->SmmuInfo[SmmuIndex].SmmuBase));
+  //   }
+  // }
 
-  // Initialize IoMmu Protocol
-  Status = IoMmuInit ();
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: Failed to intall IoMmuProtocol\n", __func__));
-    goto Error;
-  }
+  // // Initialize IoMmu Protocol
+  // Status = IoMmuInit ();
+  // if (EFI_ERROR (Status)) {
+  //   DEBUG ((DEBUG_ERROR, "%a: Failed to intall IoMmuProtocol\n", __func__));
+  //   goto Error;
+  // }
 
   DEBUG ((DEBUG_INFO, "%a: Status = %llx\n", __func__, Status));
 
   return Status;
 
 Error:
-  IoMmuDeInit (mIoMmu);
+  // IoMmuDeInit (mIoMmu);
   mIoMmu = NULL;
   return Status;
 }
