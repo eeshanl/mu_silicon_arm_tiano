@@ -30,6 +30,9 @@
 
 // Global IOMMU/SMMU instance
 IOMMU_CONFIG  *mIoMmu;
+// Global GIC interrupt protocol instance
+// This is used to register the EVTQ interrupt handler for SMMUv3.
+EFI_HARDWARE_INTERRUPT2_PROTOCOL  *GicInterrupt;
 
 /**
   Calculate and update the checksum of an ACPI table.
@@ -710,13 +713,6 @@ SmmuV3Configure (
   SmmuV3WriteRegister32 (SmmuInfo->SmmuBase + SMMUV3_PAGE_1_OFFSET, SMMU_EVENTQ_PROD, 0);
   SmmuV3WriteRegister32 (SmmuInfo->SmmuBase + SMMUV3_PAGE_1_OFFSET, SMMU_EVENTQ_CONS, 0);
 
-  // Enable GError and event interrupts
-  Status = SmmuV3EnableInterrupts (SmmuInfo->SmmuBase);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "%a: Error enabling interrupts\n", __func__));
-    goto End;
-  }
-
   // Configure CR1
   Cr1.AsUINT32  = SmmuV3ReadRegister32 (SmmuInfo->SmmuBase, SMMU_CR1);
   Cr1.AsUINT32 &= ~SMMUV3_CR1_VALID_MASK;
@@ -790,6 +786,20 @@ SmmuV3Configure (
   Status = SmmuV3SendCommand (SmmuInfo, &Command);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "%a: Error sending command.\n", __func__));
+    goto End;
+  }
+
+  // Register EVTQ
+  Status = SmmuV3RegisterGicIsr (GicInterrupt, SmmuInfo);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: Error registering ISR\n", __func__));
+    goto End;
+  }
+
+  // Enable GError and event interrupts
+  Status = SmmuV3EnableInterrupts (SmmuInfo->SmmuBase);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: Error enabling interrupts\n", __func__));
     goto End;
   }
 
@@ -1072,6 +1082,17 @@ InitializeSmmuDxe (
                   );
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "%a: Failed to locate ACPI Table Protocol\n", __func__));
+    return Status;
+  }
+
+  // Retrieve GIC interrupt registration interface.
+  Status = gBS->LocateProtocol (
+                  &gHardwareInterrupt2ProtocolGuid,
+                  NULL,
+                  (VOID **)&GicInterrupt
+                  );
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: Failed to locate GIC interrupt potocol\n", __func__));
     return Status;
   }
 

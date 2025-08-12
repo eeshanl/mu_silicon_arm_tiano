@@ -15,6 +15,7 @@
 #include <Register/SmmuV3Registers.h>
 #include <Uefi/UefiBaseType.h>
 #include <IndustryStandard/IoRemappingTable.h>
+#include <Protocol/HardwareInterrupt2.h>
 #include <Protocol/IoMmu.h>
 #include "IoMmu.h"
 
@@ -165,24 +166,26 @@ typedef struct _RMR_NODE_INFO {
 
 // General SMMU Information for a SMMU instance
 typedef struct _SMMU_INFO {
-  PAGE_TABLE    *PageTableRoot;
-  VOID          *StreamTable;
-  VOID          *CommandQueue;
-  VOID          *EventQueue;
-  LIST_ENTRY    RmrNodeList;
-  UINT64        SmmuBase;
-  UINT32        StreamTableSize;
-  UINT32        StreamTableEntryMax;
-  UINT32        Flags;
-  UINT32        CommandQueueSize;
-  UINT32        EventQueueSize;
-  UINT32        StreamTableLog2Size;
-  UINT32        CommandQueueLog2Size;
-  UINT32        EventQueueLog2Size;
-  UINT32        OutputAddressWidth;
-  UINT8         TranslationStartingLevel;
-  BOOLEAN       PageTableRootConcatenated;
-  BOOLEAN       Enabled;
+  HARDWARE_INTERRUPT_SOURCE    EvtqIrqNum;
+  HARDWARE_INTERRUPT_SOURCE    GerrIrqNum;
+  PAGE_TABLE                   *PageTableRoot;
+  VOID                         *StreamTable;
+  VOID                         *CommandQueue;
+  VOID                         *EventQueue;
+  LIST_ENTRY                   RmrNodeList;
+  UINT64                       SmmuBase;
+  UINT32                       StreamTableSize;
+  UINT32                       StreamTableEntryMax;
+  UINT32                       Flags;
+  UINT32                       CommandQueueSize;
+  UINT32                       EventQueueSize;
+  UINT32                       StreamTableLog2Size;
+  UINT32                       CommandQueueLog2Size;
+  UINT32                       EventQueueLog2Size;
+  UINT32                       OutputAddressWidth;
+  UINT8                        TranslationStartingLevel;
+  BOOLEAN                      PageTableRootConcatenated;
+  BOOLEAN                      Enabled;
 } SMMU_INFO;
 
 // IoMmu configuration structure
@@ -193,6 +196,9 @@ typedef struct _IOMMU_CONFIG {
 
 // IOMMU/SMMU instance
 extern IOMMU_CONFIG  *mIoMmu;
+// GIC interrupt protocol instance
+// This is used to register the EVTQ interrupt handler for SMMUv3.
+extern EFI_HARDWARE_INTERRUPT2_PROTOCOL  *GicInterrupt;
 
 /**
   Decode the address width from the given address size type.
@@ -515,6 +521,21 @@ SmmuV3ParseIort (
   IN  VOID       *IortTable,
   OUT SMMU_INFO  **SmmuInfo,
   OUT UINT32     *SmmuCount
+  );
+
+/**
+* Register GIC interrupt source for SmmuV3 EVTQ and GERR interrupts.
+*
+* @param[in] GicInterrupt  Pointer to the GIC interrupt protocol.
+* @param[in] SmmuInfo      Pointer to the SMMU_INFO structure.
+*
+* @retval EFI_SUCCESS           The interrupt source was registered successfully.
+* @retval EFI_INVALID_PARAMETER The GicInterrupt or SmmuInfo is NULL.
+*/
+EFI_STATUS
+SmmuV3RegisterGicIsr (
+  IN EFI_HARDWARE_INTERRUPT2_PROTOCOL  *GicInterrupt,
+  IN SMMU_INFO                         *SmmuInfo
   );
 
 #endif

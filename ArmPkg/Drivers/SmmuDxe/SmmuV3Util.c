@@ -642,6 +642,11 @@ SmmuV3LogErrors (
     return;
   }
 
+  if (SmmuInfo->Enabled == FALSE) {
+    DEBUG ((DEBUG_VERBOSE, "%a: SMMU not enabled\n", __func__));
+    return;
+  }
+
   do {
     // Only consumes one entry at a time, so we loop until empty
     Status = SmmuV3ConsumeEventQueueForErrors (SmmuInfo, &FaultRecord, &IsEmpty);
@@ -973,6 +978,8 @@ SmmuV3GetNodeInfo (
       SmmuInfoArray[SmmuIndex].Flags               = SmmuNode->Flags;
       SmmuInfoArray[SmmuIndex].StreamTableEntryMax = 0;  // Initialize max stream ID to 0
       SmmuNodePtrs[SmmuIndex]                      = (VOID *)SmmuNode;
+      SmmuInfoArray[SmmuIndex].EvtqIrqNum          = SmmuNode->Event;
+      SmmuInfoArray[SmmuIndex].GerrIrqNum          = SmmuNode->Gerr;
       SmmuIndex++;
     }
 
@@ -1439,4 +1446,161 @@ Error:
   }
 
   return Status;
+}
+
+/**
+  SMMU ISR Handler
+
+  @param[in] Source          The interrupt source.
+  @param[in] SystemContext   The system context.
+**/
+STATIC
+VOID
+EFIAPI
+SmmuV3IsrHandler (
+  IN  HARDWARE_INTERRUPT_SOURCE  Source,
+  IN  EFI_SYSTEM_CONTEXT         SystemContext
+  )
+{
+  SMMU_INFO   *SmmuInfo;
+  UINT32      SmmuIndex;
+  EFI_STATUS  Status;
+
+  DEBUG ((DEBUG_INFO, "%a: ISR received for source %d\n", __func__, Source));
+
+  if ((mIoMmu == NULL) || (mIoMmu->SmmuInfo == NULL)) {
+    DEBUG ((DEBUG_ERROR, "%a: IOMMU_CONFIG/SMMU_INFO structure is NULL\n", __func__));
+    return;
+  }
+
+  for (SmmuIndex = 0; SmmuIndex < mIoMmu->SmmuCount; SmmuIndex++) {
+    SmmuInfo = &mIoMmu->SmmuInfo[SmmuIndex];
+    if ((Source == SmmuInfo->EvtqIrqNum) || (Source == SmmuInfo->GerrIrqNum)) {
+      SmmuV3LogErrors (SmmuInfo);
+      break;
+    }
+  }
+
+  Status = GicInterrupt->EndOfInterrupt (GicInterrupt, Source);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: Error ending interrupt\n", __func__));
+    return;
+  }
+
+  DEBUG ((DEBUG_INFO, "%a: ISR handled for source %d\n", __func__, Source));
+}
+
+/**
+  Register GIC interrupt source helper.
+
+  @param[in] GicInterrupt  Pointer to the GIC interrupt protocol.
+  @param[in] Source        The interrupt source to register.
+
+  @retval EFI_SUCCESS           The interrupt source was registered successfully.
+  @retval EFI_INVALID_PARAMETER The GicInterrupt or Source is NULL.
+**/
+STATIC
+EFI_STATUS
+SmmuV3RegisterInterruptSource (
+  IN EFI_HARDWARE_INTERRUPT2_PROTOCOL  *GicInterrupt,
+  IN HARDWARE_INTERRUPT_SOURCE         Source
+  )
+{
+  EFI_STATUS  Status;
+  BOOLEAN     InterruptState;
+
+  InterruptState = FALSE;
+
+  DEBUG ((DEBUG_INFO, "%a: Registering GIC interrupt for source %d\n", __func__, Source));
+
+  if ((GicInterrupt == NULL) || (Source == 0)) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid Parameters\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
+
+  //
+  // Register the GIC interrupt for SMMU EVTQ and GERR
+  //
+  Status = GicInterrupt->RegisterInterruptSource (
+                           GicInterrupt,
+                           Source,
+                           SmmuV3IsrHandler
+                           );
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: Error registering interrupt source\n", __func__));
+    return Status;
+  }
+
+  //
+  // Set GIC interrupt trigger type (EDGE).
+  //
+  Status = GicInterrupt->SetTriggerType (
+                           GicInterrupt,
+                           Source,
+                           EFI_HARDWARE_INTERRUPT2_TRIGGER_EDGE_RISING
+                           );
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: Error setting trigger type\n", __func__));
+    return Status;
+  }
+
+  //
+  // Enable the interrupt
+  //
+  Status = GicInterrupt->GetInterruptSourceState (
+                           GicInterrupt,
+                           Source,
+                           &InterruptState
+                           );
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: Error getting interrupt state!\n", __func__));
+    return Status;
+  }
+
+  if (InterruptState == FALSE) {
+    Status = GicInterrupt->EnableInterruptSource (GicInterrupt, Source);
+    if (EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_ERROR, "%a: Error enabling interrupt source!\n", __func__));
+      return Status;
+    }
+  }
+
+  return EFI_SUCCESS;
+}
+
+/**
+  Register GIC interrupt source for SmmuV3 EVTQ and GERR interrupts.
+
+  @param[in] GicInterrupt  Pointer to the GIC interrupt protocol.
+  @param[in] SmmuInfo      Pointer to the SMMU_INFO structure.
+
+  @retval EFI_SUCCESS           The interrupt source was registered successfully.
+  @retval EFI_INVALID_PARAMETER The GicInterrupt or SmmuInfo is NULL.
+**/
+EFI_STATUS
+SmmuV3RegisterGicIsr (
+  IN EFI_HARDWARE_INTERRUPT2_PROTOCOL  *GicInterrupt,
+  IN SMMU_INFO                         *SmmuInfo
+  )
+{
+  EFI_STATUS  Status;
+
+  if ((GicInterrupt == NULL) || (SmmuInfo == NULL)) {
+    DEBUG ((DEBUG_ERROR, "%a: Invalid Parameters\n", __func__));
+    return EFI_INVALID_PARAMETER;
+  }
+
+  Status = SmmuV3RegisterInterruptSource (GicInterrupt, SmmuInfo->EvtqIrqNum);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: Error registering EVTQ interrupt\n", __func__));
+    return Status;
+  }
+
+  Status = SmmuV3RegisterInterruptSource (GicInterrupt, SmmuInfo->GerrIrqNum);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "%a: Error registering GERR interrupt\n", __func__));
+    return Status;
+  }
+
+  return EFI_SUCCESS;
 }
